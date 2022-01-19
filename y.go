@@ -6,6 +6,7 @@ import __yyfmt__ "fmt"
 
 import (
 	cmd "cli/controllers"
+	"os"
 	"strconv"
 	"strings"
 )
@@ -2358,6 +2359,7 @@ cmd.WarningLogger.Println("Unknown Command")			/*yylex.Error(msg)*/
 	case 49:
 		{
 			yyVAL.node = &strNode{STR, yyS[yypt-1].s}
+			SpaceCount.readCtr += 1
 		}
 	case 50:
 		{
@@ -3113,18 +3115,32 @@ cmd.WarningLogger.Println("Unknown Command")			/*yylex.Error(msg)*/
 		}
 	case 239:
 		{
+			println("$1", yyS[yypt-1].s)
+			println("SP:", SpaceCount.s[0])
+			i := SpaceCount.read(yyS[yypt-1].s, SpaceCount.readCtr).(int)
+			println("idx:", i)
+			os.Exit(0)
+			w := SpaceCount.s[SpaceCount.readCtr][:i+(len(yyS[yypt-1].s))]
+			SpaceCount.s[SpaceCount.readCtr] = SpaceCount.s[SpaceCount.readCtr][i+(len(yyS[yypt-1].s)):]
 			if yyS[yypt-0].s != "" {
-				yyVAL.s = yyS[yypt-1].s + GetEspaces((&SpaceCount).read().(int)) + yyS[yypt-0].s
+				yyVAL.s = w + yyS[yypt-0].s
 			} else {
-				yyVAL.s = yyS[yypt-1].s
+				yyVAL.s = w
 			}
 		}
 	case 240:
 		{
+			println("$1", yyS[yypt-1].s)
+			println("SP:", SpaceCount.s[0])
+			i := SpaceCount.read(yyS[yypt-1].s, SpaceCount.readCtr).(int)
+			println("idx:", i)
+			os.Exit(0)
+			w := SpaceCount.s[SpaceCount.readCtr][:i+(len(yyS[yypt-1].s))]
+			SpaceCount.s[SpaceCount.readCtr] = SpaceCount.s[SpaceCount.readCtr][i+(len(yyS[yypt-1].s)):]
 			if yyS[yypt-0].s != "" {
-				yyVAL.s = yyS[yypt-1].s + GetEspaces((&SpaceCount).read().(int)) + yyS[yypt-0].s
+				yyVAL.s = w + yyS[yypt-0].s
 			} else {
-				yyVAL.s = yyS[yypt-1].s
+				yyVAL.s = w
 			}
 		}
 	case 241:

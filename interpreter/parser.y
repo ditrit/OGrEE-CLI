@@ -388,7 +388,7 @@ factor: TOK_LPAREN EXPR TOK_RPAREN {$$=$2}
                                                  }
                                                 }
        |TOK_WORD {$$=&symbolReferenceNode{REFERENCE, $1,&numNode{NUM,0}, nil}}
-       |TOK_QUOT STRARG TOK_QUOT {$$=&strNode{STR, $2}}
+       |TOK_QUOT STRARG TOK_QUOT {$$=&strNode{STR, $2}; SpaceCount.readCtr+=1}
        |TOK_BOOL {var x bool;if $1=="false"{x = false}else{x=true};$$=&boolNode{BOOL, x}}
        ;
 
@@ -667,8 +667,11 @@ OCSEL:      TOK_SELECT {$$=&commonNode{COMMON, cmd.ShowClipBoard, "select", nil}
             |TOK_SELECT TOK_DOT TOK_WORD TOK_EQUAL EXPR {/*x := $3+"="+$5;*/ val:=($5).(node).execute(); println("Our val:", val); x:=map[string]interface{}{$3:val}; $$=&commonNode{COMMON, cmd.UpdateSelection, "UpdateSelect", []interface{}{x}};}
 ;
 
-STRARG: WORDORNUM STRARG {if $2 != "" {$$=$1+GetEspaces((&SpaceCount).read().(int))+$2} else {$$=$1};}
-       | ANYTOKEN STRARG {if $2 != "" {$$=$1+GetEspaces((&SpaceCount).read().(int))+$2} else {$$=$1};}
+/*println("$1",$1);println("SP:", SpaceCount.s[0]); os.Exit(0);*/
+STRARG: WORDORNUM STRARG 
+       {println("$1",$1);println("SP:", SpaceCount.s[0]); i := SpaceCount.read($1, SpaceCount.readCtr).(int); println("idx:",i);w := SpaceCount.s[SpaceCount.readCtr][:i+(len($1))];SpaceCount.s[SpaceCount.readCtr] = SpaceCount.s[SpaceCount.readCtr][i+(len($1)):]; if $2 != "" {$$=w+$2} else {$$=w}}
+       | ANYTOKEN STRARG 
+       {println("$1",$1);println("SP:", SpaceCount.s[0]); i := SpaceCount.read($1, SpaceCount.readCtr).(int); println("idx:",i);w := SpaceCount.s[SpaceCount.readCtr][:i+(len($1))];SpaceCount.s[SpaceCount.readCtr] = SpaceCount.s[SpaceCount.readCtr][i+(len($1)):]; if $2 != "" {$$=w+$2} else {$$=w}}
        | {$$=""}
 ;
 

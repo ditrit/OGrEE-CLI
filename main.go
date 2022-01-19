@@ -18,13 +18,22 @@ import (
 var rlPtr *readline.Instance
 
 func InterpretLine(str *string) {
-	SpaceCount.locs = make(map[int]int, 2)
+	SpaceCount.init()
 	lex := NewLexer(strings.NewReader(*str))
+
 	yyParse(lex)
 	if root != nil {
 		root.execute()
 		root = nil
 	}
+
+	//Debug block
+	//lets view the spaces
+	/*println(len(SpaceCount.locs))
+	for i := range SpaceCount.locs {
+		println("@", i, "we have count:", SpaceCount.locs[i])
+	}*/
+	//End Debug Block
 
 	//SpaceCount.reset()
 
