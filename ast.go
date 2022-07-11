@@ -715,6 +715,8 @@ func (a *arithNode) execute() interface{} {
 					return lv.(float64) / rv.(float64)
 				case float32:
 					return lv.(float64) / rv.(float64)
+				case string: //additional section for unquoted paths
+					return lv.(string) + "/" + rv.(string)
 				}
 			} else if checkTypeAreNumeric(lv, rv) == true {
 				if _, ok := lv.(float64); ok {
@@ -722,9 +724,21 @@ func (a *arithNode) execute() interface{} {
 				} else {
 					return float64(lv.(int)) / rv.(float64)
 				}
+			} else { //additional section for unquoted paths
+				if _, ok := lv.(string); ok {
+					if rv == nil {
+						return lv.(string) + "/"
+					}
+				}
+				if _, ok := rv.(string); ok {
+					if lv == nil {
+						return "/" + rv.(string)
+					}
+				}
 			}
 		}
 	}
+
 	l.GetWarningLogger().Println("Invalid arithmetic operation attempted")
 	return nil
 }
