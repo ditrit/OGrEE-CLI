@@ -329,6 +329,7 @@ func getPrefixCompleter() *readline.PrefixCompleter {
 
 		readline.PcItem(".template:", true,
 			readline.PcItemDynamic(listLocal(""), false)),
+		readline.PcItem("var", false),
 		readline.PcItem(".var:", false),
 		readline.PcItem("tree", false),
 		readline.PcItem("lsten", false),

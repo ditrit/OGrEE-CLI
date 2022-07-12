@@ -165,6 +165,46 @@ func formActualPath(x string) string {
 	}
 }
 
+//Since we want to remove quotes for our paths
+//we now need a way distinguish if user input means a 
+//numeric operation or a path 
+func distinguishSlashNodeIsPath(x node) bool {
+       switch x.getType() {
+              case STR:
+                     return true
+              case REFERENCE:
+                     println("Reference detected")
+                     return false
+              default:
+                     return false
+       }
+}
+
+//Generate the correct node
+//if the user refers to numeric -> ARITHMETIC Node
+//if the user refers to path -> STRING Node
+func determineWhichNodeForSlash(x, y node) node {
+       if x == nil {
+              println("x was nil")
+       }
+       if y == nil {
+              println("y was nil")
+       }
+       if y == nil {
+              if distinguishSlashNodeIsPath(x) == true {
+                     empty := &strNode{STR, "/"}
+                     return &arithNode{ARITHMETIC, "+", empty, x}
+              }
+              println("Hey invalid command !")
+              return nil
+       }
+       if distinguishSlashNodeIsPath(x) == true {
+              return &arithNode{ARITHMETIC, "+", x, y}
+       }
+       return &arithNode{ARITHMETIC, "/", x, y}
+}
+
+
 //This func is for distinguishing template from sizeU
 //in the OCLI syntax for creating devices 
 //refer to: 
@@ -224,7 +264,7 @@ func checkIfTemplate(x interface{}) bool {
        TOK_CAM TOK_UI TOK_HIERARCH TOK_DRAWABLE TOK_ENV TOK_ORPH
        TOK_DRAW
        
-%type <s> F E P P1 WORDORNUM CDORFG NTORIENTATION newP newP1
+%type <s> F E P P1 WORDORNUM CDORFG NTORIENTATION //newP newP1
 %type <arr> WNARG NODEGETTER NODEACC
 %type <sarr> GETOBJS
 %type <elifArr> EIF
@@ -371,7 +411,8 @@ nex: nex TOK_PLUS term {$$=&arithNode{ARITHMETIC, "+", $1, $3}}
        ;
 
 term: term TOK_MULT unary {$$=&arithNode{ARITHMETIC, "*", $1, $3}}
-       |term TOK_SLASH unary {$$=&arithNode{ARITHMETIC, "/", $1, $3}}
+       |term TOK_SLASH unary {x:=determineWhichNodeForSlash($1,$3);$$=x} //$$=&arithNode{ARITHMETIC, "/", $1, $3}
+
        |term TOK_MOD unary {$$=&arithNode{ARITHMETIC, "%", $1, $3}}
        |unary {$$=$1}
        ;
@@ -466,19 +507,6 @@ F:     TOK_WORD TOK_EQUAL WORDORNUM F {$$=string($1+"="+$3+"="+$4); if cmd.State
        | TOK_WORD TOK_EQUAL TOK_STR {$$=$1+"="+$3}
        | TOK_WORD TOK_EQUAL E {$$=$1+"="+$3}
        | TOK_WORD TOK_EQUAL E F {$$=string($1+"="+$3+"="+$4); if cmd.State.DebugLvl >= 3 {println("So we got: ", $$);}}
-;
-
-newP: newP1 
-       | TOK_SLASH newP1 {$$="/"+$2}
-;
-
-newP1: EXPR TOK_SLASH newP1 {$$=($1).(node).execute().(string)+"/"+$3}
-       | EXPR {println("DEBUG OUR ND TYPE:",($1).(node).getType());$$=($1).(node).execute().(string)}
-       | TOK_DOT TOK_DOT TOK_SLASH newP1 {$$="../"+$4}
-       | TOK_WORD TOK_DOT TOK_WORD {$$=$1+"."+$3}
-       | TOK_DOT TOK_DOT {$$=".."}
-       | TOK_OCDEL {$$="-"}
-       | {$$=""}
 ;
 
 P:     P1
@@ -658,13 +686,15 @@ OCDOT:      TOK_DOT TOK_VAR TOK_COL TOK_WORD TOK_EQUAL TOK_DEREF TOK_LPAREN K TO
             |TOK_DOT TOK_VAR TOK_COL TOK_WORD TOK_EQUAL TOK_DEREF TOK_LPAREN OCGET  TOK_RPAREN {$$=&assignNode{ASSIGN, $4, ($8).(node).execute()}}
             |TOK_DOT TOK_VAR TOK_COL TOK_WORD TOK_EQUAL TOK_DEREF TOK_LPAREN OCCHOOSE  TOK_RPAREN {$$=&assignNode{ASSIGN, $4, ($8).(node).execute()}}
             |TOK_DOT TOK_VAR TOK_COL TOK_WORD TOK_EQUAL TOK_DEREF TOK_LPAREN OCSEL  TOK_RPAREN {$$=&assignNode{ASSIGN, $4, ($8).(node).execute()}}
+            
+            |TOK_VAR TOK_WORD TOK_EQUAL P {println("This node is not yet complete");$$=nil}
             |TOK_DOT TOK_VAR TOK_COL TOK_WORD TOK_EQUAL EXPR {val := ($6).(node).execute(); if ($6).(node).getType() == ARITHMETIC && val == nil {$$=nil} else {$$=&assignNode{ASSIGN, $4, val}}}
-            |TOK_DOT TOK_VAR TOK_COL TOK_WORD TOK_EQUAL newP {val:=&strNode{STR, $6};$$=&assignNode{ASSIGN, $4, val}}
+
             |TOK_DOT TOK_CMDS TOK_COL P {$$=&commonNode{COMMON, cmd.LoadFile, "Load", []interface{}{$4, "cmd"}};}
             |TOK_DOT TOK_TEMPLATE TOK_COL P {$$=&commonNode{COMMON, cmd.LoadTemplate, "Load", []interface{}{$4, "template"}}}
-            |TOK_DOT TOK_VAR TOK_COL TOK_WORD TOK_EQUAL Q {$$=&assignNode{ASSIGN, $4, $6}}
-            |TOK_DOT TOK_VAR TOK_COL TOK_WORD TOK_EQUAL K {$$=&assignNode{ASSIGN, $4, $6}}
-            //|TOK_DOT TOK_VAR TOK_COL TOK_WORD TOK_EQUAL OCLISYNTX {$$=&assignNode{ASSIGN, $4, $6}}
+            |TOK_DOT TOK_VAR TOK_COL TOK_WORD TOK_EQUAL TOK_LPAREN Q TOK_RPAREN {$$=&assignNode{ASSIGN, $4, $7}}
+            |TOK_DOT TOK_VAR TOK_COL TOK_WORD TOK_EQUAL TOK_LPAREN K TOK_RPAREN {$$=&assignNode{ASSIGN, $4, $7}}
+            //|TOK_DOT TOK_VAR TOK_COL TOK_WORD TOK_EQUAL OCLISYNTX {$$=&assignNode{ASSIGN, $4, $7}}
             |TOK_DEREF TOK_WORD {$$=&symbolReferenceNode{REFERENCE, $2, &numNode{NUM,0}, nil}}
               
 
