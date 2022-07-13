@@ -2840,8 +2840,8 @@ yynewstate:
 		}
 	case 230:
 		{
-			println("This node is not yet complete")
-			yyVAL.node = nil
+			val := &strNode{STR, yyS[yypt-0].s}
+			yyVAL.node = &assignNode{ASSIGN, yyS[yypt-2].s, val}
 		}
 	case 231:
 		{

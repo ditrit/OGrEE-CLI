@@ -688,7 +688,7 @@ OCDOT:      TOK_DOT TOK_VAR TOK_COL TOK_WORD TOK_EQUAL TOK_DEREF TOK_LPAREN K TO
             |TOK_DOT TOK_VAR TOK_COL TOK_WORD TOK_EQUAL TOK_DEREF TOK_LPAREN OCCHOOSE  TOK_RPAREN {$$=&assignNode{ASSIGN, $4, ($8).(node).execute()}}
             |TOK_DOT TOK_VAR TOK_COL TOK_WORD TOK_EQUAL TOK_DEREF TOK_LPAREN OCSEL  TOK_RPAREN {$$=&assignNode{ASSIGN, $4, ($8).(node).execute()}}
             
-            |TOK_VAR TOK_WORD TOK_EQUAL P {println("This node is not yet complete");$$=nil}
+            |TOK_VAR TOK_WORD TOK_EQUAL P {val:=&strNode{STR, $4};$$=&assignNode{ASSIGN, $2, val}}
             |TOK_DOT TOK_VAR TOK_COL TOK_WORD TOK_EQUAL EXPR {val := ($6).(node).execute(); if ($6).(node).getType() == ARITHMETIC && val == nil {$$=nil} else {$$=&assignNode{ASSIGN, $4, val}}}
 
             |TOK_DOT TOK_CMDS TOK_COL P {$$=&commonNode{COMMON, cmd.LoadFile, "Load", []interface{}{$4, "cmd"}};}
