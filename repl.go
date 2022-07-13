@@ -274,6 +274,7 @@ func getPrefixCompleter() *readline.PrefixCompleter {
 			readline.PcItem("draw", false),
 			readline.PcItem("camera", false),
 			readline.PcItem("ui", false),
+			readline.PcItem("var", false),
 			readline.PcItem(".template", false),
 			readline.PcItem(".var", false),
 			readline.PcItem("unset", false),

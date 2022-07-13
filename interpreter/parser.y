@@ -607,6 +607,7 @@ BASH:  TOK_CLR {$$=&commonNode{COMMON, cmd.Clear, "CLR", nil}}
        | TOK_DOC TOK_DOT TOK_TEMPLATE {$$=&commonNode{COMMON, cmd.Help, "Help", []interface{}{".template"}}}
        | TOK_DOC TOK_DOT TOK_CMDS {$$=&commonNode{COMMON, cmd.Help, "Help", []interface{}{".cmds"}}}
        | TOK_DOC TOK_DOT TOK_VAR {$$=&commonNode{COMMON, cmd.Help, "Help", []interface{}{".var"}}}
+       | TOK_DOC TOK_VAR {$$=&commonNode{COMMON, cmd.Help, "Help", []interface{}{"var"}}}
        | TOK_DOC TOK_PLUS {$$=&commonNode{COMMON, cmd.Help, "Help", []interface{}{"+"}}}
        | TOK_DOC TOK_EQUAL {$$=&commonNode{COMMON, cmd.Help, "Help", []interface{}{"="}}}
        | TOK_DOC TOK_GREATER {$$=&commonNode{COMMON, cmd.Help, "Help", []interface{}{">"}}}
