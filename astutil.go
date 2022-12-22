@@ -64,7 +64,9 @@ func fileToJSON(path string) map[string]interface{} {
 	data := map[string]interface{}{}
 	x, e := ioutil.ReadFile(path)
 	if e != nil {
-		println("Error while opening file! " + e.Error())
+		if cmd.State.DebugLvl > cmd.NONE {
+			println("Error while opening file! " + e.Error())
+		}
 		return nil
 	}
 	json.Unmarshal(x, &data)
@@ -179,6 +181,11 @@ func resMap(x map[string]interface{}, ent string, isUpdate bool) (map[string]int
 		res["attributes"] = attrs
 	}
 	return res, nil
+}
+
+func IsMapStrInf(x interface{}) bool {
+	_, ok := x.(map[string]interface{})
+	return ok
 }
 
 func IsInfArr(x interface{}) bool {

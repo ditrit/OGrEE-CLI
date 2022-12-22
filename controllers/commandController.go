@@ -34,7 +34,9 @@ func PostObj(ent int, entity string, data map[string]interface{}) (map[string]in
 
 	if resp.StatusCode == http.StatusCreated && respMap["status"].(bool) == true {
 		//Print success message
-		println(string(respMap["message"].(string)))
+		if State.DebugLvl > NONE {
+			println(string(respMap["message"].(string)))
+		}
 
 		//If ent is in State.ObjsForUnity then notify Unity
 		if IsInObjForUnity(entity) == true {
@@ -1418,7 +1420,10 @@ func GetOCLIAtrributes(Path string, ent int, data map[string]interface{}) error 
 		_, err = PostObj(ent, "room", data)
 	case RACK:
 		attr = data["attributes"].(map[string]interface{})
-		var parentAttr map[string]interface{} = parent["attributes"].(map[string]interface{})
+		parentAttr := parent["attributes"].(map[string]interface{})
+		//Save orientation because it gets overwritten by
+		//GetOCLIAtrributesTemplateHelper()
+		orientation := attr["orientation"]
 
 		baseAttrs := map[string]interface{}{
 			"sizeUnit":   "cm",
@@ -1431,6 +1436,10 @@ func GetOCLIAtrributes(Path string, ent int, data map[string]interface{}) error 
 		//If user provided templates, get the JSON
 		//and parse into templates
 		GetOCLIAtrributesTemplateHelper(attr, data, ent)
+
+		//Restore the orientation overwritten
+		//by the helper func
+		attr["orientation"] = orientation
 
 		if attr["size"] == "" {
 			if State.DebugLvl > 0 {
@@ -1871,14 +1880,18 @@ func GetOCLIAtrributesTemplateHelper(attr, data map[string]interface{}, ent int)
 func UIDelay(time float64) {
 	subdata := map[string]interface{}{"command": "delay", "data": time}
 	data := map[string]interface{}{"type": "ui", "data": subdata}
-	Disp(data)
+	if State.DebugLvl > WARNING {
+		Disp(data)
+	}
 	InformUnity("HandleUI", -1, data)
 }
 
 func UIToggle(feature string, enable bool) {
 	subdata := map[string]interface{}{"command": feature, "data": enable}
 	data := map[string]interface{}{"type": "ui", "data": subdata}
-	Disp(data)
+	if State.DebugLvl > WARNING {
+		Disp(data)
+	}
 	InformUnity("HandleUI", -1, data)
 }
 
@@ -1889,7 +1902,9 @@ func UIHighlight(objArg string) error {
 	}
 	subdata := map[string]interface{}{"command": "highlight", "data": obj["id"]}
 	data := map[string]interface{}{"type": "ui", "data": subdata}
-	Disp(data)
+	if State.DebugLvl > WARNING {
+		Disp(data)
+	}
 	InformUnity("HandleUI", -1, data)
 	return nil
 }
@@ -1899,7 +1914,9 @@ func CameraMove(command string, position []interface{}, rotation []interface{}) 
 	subdata["position"] = map[string]interface{}{"x": position[0], "y": position[1], "z": position[2]}
 	subdata["rotation"] = map[string]interface{}{"x": rotation[0], "y": rotation[1]}
 	data := map[string]interface{}{"type": "camera", "data": subdata}
-	Disp(data)
+	if State.DebugLvl > WARNING {
+		Disp(data)
+	}
 	InformUnity("HandleUI", -1, data)
 }
 
@@ -1908,7 +1925,9 @@ func CameraWait(time float64) {
 	subdata["position"] = map[string]interface{}{"x": 0, "y": 0, "z": 0}
 	subdata["rotation"] = map[string]interface{}{"x": 999, "y": time}
 	data := map[string]interface{}{"type": "camera", "data": subdata}
-	Disp(data)
+	if State.DebugLvl > WARNING {
+		Disp(data)
+	}
 	InformUnity("HandleUI", -1, data)
 }
 
@@ -2821,8 +2840,11 @@ func InformUnity(caller string, entity int, data map[string]interface{}) error {
 		if entity > -1 && entity < SENSOR+1 {
 			data = GenerateFilteredJson(data)
 		}
-		println("DEBUG VIEW THE JSON")
-		Disp(data)
+		if State.DebugLvl > INFO {
+			println("DEBUG VIEW THE JSON")
+			Disp(data)
+		}
+
 		e := models.ContactUnity(data, State.DebugLvl)
 		if e != nil {
 			l.GetWarningLogger().Println("Unable to contact Unity Client @" + caller)
