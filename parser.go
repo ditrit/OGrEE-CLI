@@ -88,6 +88,14 @@ func skipWhiteSpaces(buffer string, start int) int {
 	return i
 }
 
+func findNextWhiteSpace(buffer string, start int, end int) int {
+	index := strings.Index(buffer[start:], " ")
+	if index == -1 {
+		return end
+	}
+	return start + index
+}
+
 func parseCommandKeyWord(buffer string, start int) (string, *ParserError) {
 	end := start + 1
 	for end < len(buffer) && listHasPrefix(commands, buffer[start:end]) {
@@ -108,7 +116,7 @@ func parseCommandKeyWord(buffer string, start int) (string, *ParserError) {
 
 func parseIdentifier(buffer string, start int, end int) (string, *ParserError) {
 	identifier := buffer[start:end]
-	if !regexMatch(`[A-Za-z0-9_][A-Za-z0-9_\-]*`, identifier) {
+	if !regexMatch(`[A-Za-z_][A-Za-z0-9_\-]*`, identifier) {
 		err := &ParserError{
 			buffer:  buffer,
 			message: "Invalid identifier name : " + identifier,
@@ -173,16 +181,28 @@ func parseArgs(buffer string, start int, end int) (map[string]string, *ParserErr
 	cursor := start
 	args := map[string]string{}
 	for cursor < end {
+		if buffer[cursor] != '-' {
+			err := &ParserError{
+				buffer:  buffer,
+				message: "'-' expected (argument list)",
+				start:   cursor,
+				end:     cursor,
+			}
+			return nil, err
+		}
+		cursor++
 		cursor = skipWhiteSpaces(buffer, cursor)
-		identifier, err := parseIdentifier(buffer, cursor, end)
+		identifierEnd := findNextWhiteSpace(buffer, cursor, end)
+		identifier, err := parseIdentifier(buffer, cursor, identifierEnd)
 		if err != nil {
 			return nil, err
 		}
 		cursor = skipWhiteSpaces(buffer, cursor+len(identifier))
-		value, err := parseString()
-		args[identifier] = 
+		valueEnd := findNextWhiteSpace(buffer, cursor, end)
+		args[identifier] = buffer[cursor:valueEnd]
+		cursor = skipWhiteSpaces(buffer, valueEnd)
 	}
-	return nil, nil
+	return args, nil
 }
 
 func Parse(buffer string) (node, *ParserError) {
