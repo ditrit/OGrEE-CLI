@@ -35,6 +35,20 @@ var commands = []string{
 	"drawable", "draw", "undraw",
 }
 
+var lsCommands = map[string]int{
+	"lsten":      0,
+	"lssite":     1,
+	"lsbldg":     2,
+	"lsroom":     3,
+	"lsrack":     4,
+	"lsdev":      5,
+	"lsac":       6,
+	"lspanel":    7,
+	"lscabinet":  8,
+	"lscorridor": 9,
+	"lssensor":   10,
+}
+
 func listHasPrefix(list []string, prefix string) bool {
 	for _, str := range list {
 		if strings.HasPrefix(str, prefix) {
@@ -53,171 +67,155 @@ func regexMatch(regex string, str string) bool {
 	return str == reg.FindString(str)
 }
 
-type Parser struct {
-	buffer string
-}
-
-type Cursor struct {
+type ParserError struct {
+	buffer  string
+	message string
 	start   int
-	current int
 	end     int
 }
 
-type ParserError struct {
-	message string
-	cursor  *Cursor
-}
-
 func (err *ParserError) Error() string {
-	return fmt.Sprintf("%s, start : %d, current : %d",
-		err.message, err.cursor.start, err.cursor.current,
+	return fmt.Sprintf("%s, start : %d, end : %d",
+		err.message, err.start, err.end,
 	)
 }
 
-func (parser *Parser) Error(message string, cursor *Cursor) *ParserError {
-	return &ParserError{message, cursor}
-}
-
-func (cursor *Cursor) forward(n int) {
-	cursor.current += n
-	if cursor.current > cursor.end {
-		panic("Cursor went too far right")
+func skipWhiteSpaces(buffer string, start int) int {
+	i := start
+	for i < len(buffer) && (buffer[i] == ' ' || buffer[i] == '\t') {
+		i += 1
 	}
+	return i
 }
 
-func (cursor *Cursor) backward(n int) {
-	cursor.current -= n
-	if cursor.current < 0 {
-		panic("Cursor went too far left")
+func parseCommandKeyWord(buffer string, start int) (string, *ParserError) {
+	end := start + 1
+	for end < len(buffer) && listHasPrefix(commands, buffer[start:end]) {
+		end++
 	}
-}
-
-func (cursor *Cursor) isStart() bool {
-	return cursor.current == cursor.start
-}
-
-func (cursor *Cursor) isEnd() bool {
-	return cursor.current == cursor.end
-}
-
-func (cursor *Cursor) left() *Cursor {
-	var left Cursor = *cursor
-	left.end = left.current
-	left.current = left.start
-	return &left
-}
-
-func (cursor *Cursor) right() *Cursor {
-	var right Cursor = *cursor
-	right.start = right.current
-	return &right
-}
-
-func (parser *Parser) read(cursor *Cursor) string {
-	return parser.buffer[cursor.start:cursor.current]
-}
-
-func (parser *Parser) readAll(cursor *Cursor) string {
-	return parser.buffer[cursor.start:cursor.end]
-}
-
-func (parser *Parser) readRemaining(cursor *Cursor) string {
-	return parser.buffer[cursor.current:cursor.end]
-}
-
-func (parser *Parser) expectCommandKeyWord(cursor *Cursor) (string, *ParserError) {
-	for !cursor.isEnd() && listHasPrefix(commands, parser.read(cursor)) {
-		cursor.forward(1)
+	end--
+	if end == start {
+		err := &ParserError{
+			buffer:  buffer,
+			message: "command name expected",
+			start:   start,
+			end:     end,
+		}
+		return "", err
 	}
-	cursor.backward(1)
-	commandKeyWord := parser.read(cursor)
-	if commandKeyWord == "" {
-		return "", parser.Error("command name expected", cursor)
-	}
-	return commandKeyWord, nil
+	return buffer[start:end], nil
 }
 
-func (parser *Parser) expectVarName(cursor *Cursor) (string, *ParserError) {
-	varName := parser.readAll(cursor)
-	if !regexMatch(`[A-Za-z0-9_][A-Za-z0-9_\-]*`, varName) {
-		return "", parser.Error("Invalid variable name : "+varName, cursor)
+func parseIdentifier(buffer string, start int, end int) (string, *ParserError) {
+	identifier := buffer[start:end]
+	if !regexMatch(`[A-Za-z0-9_][A-Za-z0-9_\-]*`, identifier) {
+		err := &ParserError{
+			buffer:  buffer,
+			message: "Invalid identifier name : " + identifier,
+			start:   start,
+			end:     end,
+		}
+		return "", err
 	}
-	return varName, nil
+	return identifier, nil
 }
 
-func (parser *Parser) expectString(cursor *Cursor) (node, *ParserError) {
+func parseString(buffer string, start int, end int) (node, *ParserError) {
 	nodesToConcat := []node{}
-	for {
-		remainingCaracters := parser.readRemaining(cursor)
-		varIndex := strings.Index(remainingCaracters, "&{")
+	cursor := start
+	for cursor < end {
+		varIndex := strings.Index(buffer[cursor:end], "&{")
 		if varIndex == -1 {
 			break
 		}
-		cursor.forward(varIndex)
-		leftStr := parser.read(cursor)
+		varIndex += cursor
+		leftStr := buffer[cursor:varIndex]
 		if leftStr != "" {
 			nodesToConcat = append(nodesToConcat, &strLeaf{leftStr})
 		}
-		cursor.forward(2)
-		*cursor = *cursor.right()
-		remainingCaracters = parser.readRemaining(cursor)
-		endVarIndex := strings.Index(remainingCaracters, "}")
-		cursor.forward(endVarIndex)
-		varName, err := parser.expectVarName(cursor.left())
+		endVarIndex := strings.Index(buffer[varIndex+2:end], "}")
+		if endVarIndex == -1 {
+			err := &ParserError{
+				buffer:  buffer,
+				message: "&{ opened but never closed",
+				start:   varIndex,
+				end:     end,
+			}
+			return nil, err
+		}
+		varName, err := parseIdentifier(buffer, varIndex+2, endVarIndex)
 		if err != nil {
 			return nil, err
 		}
 		nodesToConcat = append(nodesToConcat, &symbolReferenceNode{varName})
-		cursor.forward(1)
+		cursor = endVarIndex + 1
 	}
 	if len(nodesToConcat) == 0 {
-		return &strLeaf{parser.readAll(cursor)}, nil
+		return &strLeaf{buffer[start:end]}, nil
+	} else if len(nodesToConcat) == 1 {
+		return nodesToConcat[0], nil
 	}
 	return &concatNode{nodes: nodesToConcat}, nil
 }
 
-func (parser *Parser) expectPath(cursor *Cursor) (node, *ParserError) {
-	path, err := parser.expectString(cursor)
+func parsePath(buffer string, start int, end int) (node, *ParserError) {
+	if start == end {
+		return &pathNode{&strLeaf{"."}, STD}, nil
+	}
+	path, err := parseString(buffer, start, end)
 	if err != nil {
 		return nil, err
 	}
 	return &pathNode{path, STD}, nil
 }
 
-func (parser *Parser) rootParse() (node, *ParserError) {
-	commandKeyWord, err := parser.expectCommandKeyWord()
+func parseArgs(buffer string, start int, end int) (map[string]string, *ParserError) {
+	cursor := start
+	args := map[string]string{}
+	for cursor < end {
+		cursor = skipWhiteSpaces(buffer, cursor)
+		identifier, err := parseIdentifier(buffer, cursor, end)
+		if err != nil {
+			return nil, err
+		}
+		cursor = skipWhiteSpaces(buffer, cursor+len(identifier))
+		value, err := parseString()
+		args[identifier] = 
+	}
+	return nil, nil
+}
+
+func Parse(buffer string) (node, *ParserError) {
+	cursor := skipWhiteSpaces(buffer, 0)
+	commandKeyWord, err := parseCommandKeyWord(buffer, cursor)
 	if err != nil {
 		return nil, err
 	}
 	println("Command key word :", commandKeyWord)
+	cursor = skipWhiteSpaces(buffer, cursor+len(commandKeyWord))
+
+	if lsIdx, ok := lsCommands[commandKeyWord]; ok {
+		path, err := parsePath(buffer, cursor, len(buffer))
+		if err != nil {
+			return nil, err
+		}
+		return &lsObjNode{path, lsIdx, nil}, nil
+	}
 
 	switch commandKeyWord {
 	case "get":
-		path, err := parser.expectPath()
+		path, err := parsePath(buffer, cursor, len(buffer))
 		if err != nil {
 			return nil, err
 		}
 		return &getObjectNode{path}, nil
 	case "ls":
+		path, err := parsePath(buffer, cursor, len(buffer))
+		if err != nil {
+			return nil, err
+		}
+		return &lsNode{path}, nil
 
 	}
-
 	panic("command not processed")
-}
-
-func Parse(command string) node {
-	buffer := []rune(command)
-	parser := Parser{
-		buffer:        buffer,
-		startCursor:   0,
-		currentCursor: 0,
-		endCursor:     len(buffer),
-	}
-
-	root, err := parser.rootParse()
-	if err != nil {
-		println("Error :", err.Error())
-	}
-
-	return
 }
