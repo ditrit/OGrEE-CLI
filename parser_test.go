@@ -1,19 +1,27 @@
 package main
 
 import (
-	"fmt"
+	"reflect"
 	"testing"
 )
 
-func TestParseArsg(t *testing.T) {
-	buffer := "-a 42 -s dazd"
-	args, err := parseArgs(buffer, 0, len(buffer))
+func TestParseArgs(t *testing.T) {
+	buffer := "-a 42 -v  -s dazd  -f plouf"
+	args, err := parseArgs([]string{"a", "s"}, []string{"v", "f"}, buffer, 0)
 	if err != nil {
 		t.Errorf(err.Error())
 	}
-	fmt.Printf("%v", args)
+	if !reflect.DeepEqual(args, map[string]any{"a": "42", "s": "dazd", "v": nil, "f": nil}) {
+		t.Errorf("wrong args returned")
+	}
+}
+
+func TestParsePath(t *testing.T) {
+
 }
 
 func TestParse(t *testing.T) {
-	Parse("get coucou")
+	a := "⌘dsqd"
+	b := []rune(a)
+	println(len(a), len(b))
 }

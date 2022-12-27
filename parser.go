@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"unicode"
 )
 
 var eof = rune(0)
@@ -49,8 +50,17 @@ var lsCommands = map[string]int{
 	"lssensor":   10,
 }
 
-func listHasPrefix(list []string, prefix string) bool {
-	for _, str := range list {
+func sliceContains(slice []string, s string) bool {
+	for _, str := range slice {
+		if str == s {
+			return true
+		}
+	}
+	return false
+}
+
+func sliceContainsPrefix(slice []string, prefix string) bool {
+	for _, str := range slice {
 		if strings.HasPrefix(str, prefix) {
 			return true
 		}
@@ -88,28 +98,27 @@ func skipWhiteSpaces(buffer string, start int) int {
 	return i
 }
 
-func findNextWhiteSpace(buffer string, start int, end int) int {
-	index := strings.Index(buffer[start:], " ")
-	if index == -1 {
-		return end
+func findNextWhiteSpace(buffer string, start int) int {
+	i := start
+	for buffer[i] != ' ' && buffer[i] != '\t' {
+		i += 1
 	}
-	return start + index
+	return i
 }
 
 func parseCommandKeyWord(buffer string, start int) (string, *ParserError) {
 	end := start + 1
-	for end < len(buffer) && listHasPrefix(commands, buffer[start:end]) {
+	for end < len(buffer) && sliceContainsPrefix(commands, buffer[start:end]) {
 		end++
 	}
 	end--
 	if end == start {
-		err := &ParserError{
+		return "", &ParserError{
 			buffer:  buffer,
 			message: "command name expected",
 			start:   start,
 			end:     end,
 		}
-		return "", err
 	}
 	return buffer[start:end], nil
 }
@@ -117,13 +126,12 @@ func parseCommandKeyWord(buffer string, start int) (string, *ParserError) {
 func parseIdentifier(buffer string, start int, end int) (string, *ParserError) {
 	identifier := buffer[start:end]
 	if !regexMatch(`[A-Za-z_][A-Za-z0-9_\-]*`, identifier) {
-		err := &ParserError{
+		return "", &ParserError{
 			buffer:  buffer,
 			message: "Invalid identifier name : " + identifier,
 			start:   start,
 			end:     end,
 		}
-		return "", err
 	}
 	return identifier, nil
 }
@@ -143,13 +151,12 @@ func parseString(buffer string, start int, end int) (node, *ParserError) {
 		}
 		endVarIndex := strings.Index(buffer[varIndex+2:end], "}")
 		if endVarIndex == -1 {
-			err := &ParserError{
+			return nil, &ParserError{
 				buffer:  buffer,
 				message: "&{ opened but never closed",
 				start:   varIndex,
 				end:     end,
 			}
-			return nil, err
 		}
 		varName, err := parseIdentifier(buffer, varIndex+2, endVarIndex)
 		if err != nil {
@@ -177,30 +184,35 @@ func parsePath(buffer string, start int, end int) (node, *ParserError) {
 	return &pathNode{path, STD}, nil
 }
 
-func parseArgs(buffer string, start int, end int) (map[string]string, *ParserError) {
+func parseArgs(allowedArgs []string, allowedFlags []string, buffer string, start int) (
+	map[string]any, *ParserError,
+) {
+	args := map[string]any{}
 	cursor := start
-	args := map[string]string{}
-	for cursor < end {
-		if buffer[cursor] != '-' {
-			err := &ParserError{
-				buffer:  buffer,
-				message: "'-' expected (argument list)",
-				start:   cursor,
-				end:     cursor,
-			}
-			return nil, err
-		}
+	for buffer[cursor] == '-' {
 		cursor++
 		cursor = skipWhiteSpaces(buffer, cursor)
-		identifierEnd := findNextWhiteSpace(buffer, cursor, end)
+		identifierEnd := findNextWhiteSpace(buffer, cursor)
 		identifier, err := parseIdentifier(buffer, cursor, identifierEnd)
 		if err != nil {
 			return nil, err
 		}
 		cursor = skipWhiteSpaces(buffer, cursor+len(identifier))
-		valueEnd := findNextWhiteSpace(buffer, cursor, end)
-		args[identifier] = buffer[cursor:valueEnd]
-		cursor = skipWhiteSpaces(buffer, valueEnd)
+		if sliceContains(allowedArgs, identifier) {
+			valueEnd := findNextWhiteSpace(buffer, cursor)
+			args[identifier] = buffer[cursor:valueEnd]
+			cursor = valueEnd
+		} else if sliceContains(allowedFlags, identifier) {
+			args[identifier] = nil
+		} else {
+			return nil, &ParserError{
+				buffer:  buffer,
+				message: fmt.Sprintf("unexpected argument : %s", identifier),
+				start:   cursor,
+				end:     identifierEnd,
+			}
+		}
+		cursor = skipWhiteSpaces(buffer, cursor)
 	}
 	return args, nil
 }
@@ -234,11 +246,15 @@ func Parse(buffer string) (node, *ParserError) {
 	cursor = skipWhiteSpaces(buffer, cursor+len(commandKeyWord))
 
 	if lsIdx, ok := lsCommands[commandKeyWord]; ok {
+		args, err := parseArgs([]string{"s", "f"}, []string{"r"}, buffer, cursor)
+		if err != nil {
+			return nil, err
+		}
 		path, err := parsePath(buffer, cursor, len(buffer))
 		if err != nil {
 			return nil, err
 		}
-		return &lsObjNode{path, lsIdx, nil}, nil
+		return &lsObjNode{path, lsIdx, args}, nil // TODO : Adapt lsObjNode
 	}
 
 	switch commandKeyWord {
@@ -249,12 +265,15 @@ func Parse(buffer string) (node, *ParserError) {
 		}
 		return &getObjectNode{path}, nil
 	case "ls":
+		args, err := parseArgs([]string{"s"}, []string{}, buffer, cursor)
+		if err != nil {
+			return nil, err
+		}
 		path, err := parsePath(buffer, cursor, len(buffer))
 		if err != nil {
 			return nil, err
 		}
-		return &lsNode{path}, nil
-
+		return &lsAttrGenericNode{path, args}, nil
 	}
 	panic("command not processed")
 }
