@@ -205,7 +205,26 @@ func parseArgs(buffer string, start int, end int) (map[string]string, *ParserErr
 	return args, nil
 }
 
+func firstNonAscii(s string) int {
+	for i := 0; i < len(s); i++ {
+		if s[i] > unicode.MaxASCII {
+			return i
+		}
+	}
+	return -1
+}
+
 func Parse(buffer string) (node, *ParserError) {
+	firstNonAsciiIdx := firstNonAscii(buffer)
+	if firstNonAsciiIdx != -1 {
+		return nil, &ParserError{
+			buffer:  buffer,
+			message: "command should only contain ascii characters",
+			start:   firstNonAsciiIdx,
+			end:     firstNonAsciiIdx,
+		}
+	}
+
 	cursor := skipWhiteSpaces(buffer, 0)
 	commandKeyWord, err := parseCommandKeyWord(buffer, cursor)
 	if err != nil {
