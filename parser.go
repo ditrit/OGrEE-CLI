@@ -226,6 +226,45 @@ func firstNonAscii(s string) int {
 	return -1
 }
 
+func parseLsObj(lsIdx int, buffer string, start int) (node, *ParserError) {
+	args, err := parseArgs([]string{"s", "f"}, []string{"r"}, buffer, start)
+	if err != nil {
+		return nil, err
+	}
+	path, err := parsePath(buffer, start, len(buffer))
+	if err != nil {
+		return nil, err
+	}
+	return &lsObjNode{path, lsIdx, args}, nil // TODO : Adapt lsObjNode
+}
+
+func parseLs(buffer string, start int) (node, *ParserError) {
+	args, err := parseArgs([]string{"s"}, []string{}, buffer, start)
+	if err != nil {
+		return nil, err
+	}
+	path, err := parsePath(buffer, start, len(buffer))
+	if err != nil {
+		return nil, err
+	}
+	afterArgs, err := parseArgs([]string{"s"}, []string{}, buffer, start)
+	if err != nil {
+		return nil, err
+	}
+	for arg, value := range afterArgs {
+		args[arg] = value
+	}
+	return &lsAttrGenericNode{path, args}, nil
+}
+
+func parseGet(buffer string, start int) (node, *ParserError) {
+	path, err := parsePath(buffer, start, len(buffer))
+	if err != nil {
+		return nil, err
+	}
+	return &getObjectNode{path}, nil
+}
+
 func Parse(buffer string) (node, *ParserError) {
 	firstNonAsciiIdx := firstNonAscii(buffer)
 	if firstNonAsciiIdx != -1 {
@@ -246,34 +285,16 @@ func Parse(buffer string) (node, *ParserError) {
 	cursor = skipWhiteSpaces(buffer, cursor+len(commandKeyWord))
 
 	if lsIdx, ok := lsCommands[commandKeyWord]; ok {
-		args, err := parseArgs([]string{"s", "f"}, []string{"r"}, buffer, cursor)
-		if err != nil {
-			return nil, err
-		}
-		path, err := parsePath(buffer, cursor, len(buffer))
-		if err != nil {
-			return nil, err
-		}
-		return &lsObjNode{path, lsIdx, args}, nil // TODO : Adapt lsObjNode
+		return parseLsObj(lsIdx, buffer, cursor)
 	}
 
 	switch commandKeyWord {
 	case "get":
-		path, err := parsePath(buffer, cursor, len(buffer))
-		if err != nil {
-			return nil, err
-		}
-		return &getObjectNode{path}, nil
+		return parseGet(buffer, cursor)
 	case "ls":
-		args, err := parseArgs([]string{"s"}, []string{}, buffer, cursor)
-		if err != nil {
-			return nil, err
-		}
-		path, err := parsePath(buffer, cursor, len(buffer))
-		if err != nil {
-			return nil, err
-		}
-		return &lsAttrGenericNode{path, args}, nil
+		return parseLs(buffer, cursor)
+	case "getu":
+
 	}
 	panic("command not processed")
 }
