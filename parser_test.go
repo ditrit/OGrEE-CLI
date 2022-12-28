@@ -7,7 +7,7 @@ import (
 
 func TestParseArgs(t *testing.T) {
 	buffer := "-a 42 -v  -s dazd  -f plouf"
-	args, err := parseArgs([]string{"a", "s"}, []string{"v", "f"}, buffer, 0)
+	args, _, err := parseArgs([]string{"a", "s"}, []string{"v", "f"}, buffer, 0)
 	if err != nil {
 		t.Errorf(err.Error())
 	}

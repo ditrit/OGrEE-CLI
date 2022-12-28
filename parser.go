@@ -124,17 +124,17 @@ func parseCommandKeyWord(buffer string, start int) (string, *ParserError) {
 	return buffer[start:end], nil
 }
 
-func parseIdentifier(buffer string, start int, end int) (string, *ParserError) {
-	identifier := buffer[start:end]
-	if !regexMatch(`[A-Za-z_][A-Za-z0-9_\-]*`, identifier) {
+func parseWord(buffer string, start int, end int) (string, *ParserError) {
+	word := buffer[start:end]
+	if !regexMatch(`[A-Za-z_][A-Za-z0-9_\-]*`, word) {
 		return "", &ParserError{
 			buffer:  buffer,
-			message: "Invalid identifier name : " + identifier,
+			message: "Invalid word : " + word,
 			start:   start,
 			end:     end,
 		}
 	}
-	return identifier, nil
+	return word, nil
 }
 
 func parseInt(buffer string, start int, end int) (int, *ParserError) {
@@ -172,7 +172,7 @@ func parseString(buffer string, start int, end int) (node, *ParserError) {
 				end:     end,
 			}
 		}
-		varName, err := parseIdentifier(buffer, varIndex+2, endVarIndex)
+		varName, err := parseWord(buffer, varIndex+2, endVarIndex)
 		if err != nil {
 			return nil, err
 		}
@@ -196,6 +196,7 @@ func parsePath(buffer string, start int) (node, int, *ParserError) {
 	if err != nil {
 		return nil, 0, err
 	}
+	end = skipWhiteSpaces(buffer, end)
 	return &pathNode{path, STD}, end, nil
 }
 
@@ -207,24 +208,25 @@ func parseArgs(allowedArgs []string, allowedFlags []string, buffer string, start
 	for buffer[cursor] == '-' {
 		cursor++
 		cursor = skipWhiteSpaces(buffer, cursor)
-		identifierEnd := findNextWhiteSpace(buffer, cursor)
-		identifier, err := parseIdentifier(buffer, cursor, identifierEnd)
+		wordEnd := findNextWhiteSpace(buffer, cursor)
+		arg, err := parseWord(buffer, cursor, wordEnd)
 		if err != nil {
 			return nil, 0, err
 		}
-		cursor = skipWhiteSpaces(buffer, cursor+len(identifier))
-		if sliceContains(allowedArgs, identifier) {
+		cursor = skipWhiteSpaces(buffer, cursor+len(arg))
+		if sliceContains(allowedArgs, arg) {
 			valueEnd := findNextWhiteSpace(buffer, cursor)
-			args[identifier] = buffer[cursor:valueEnd]
+			value := buffer[cursor:valueEnd]
+			args[arg] = value
 			cursor = valueEnd
-		} else if sliceContains(allowedFlags, identifier) {
-			args[identifier] = nil
+		} else if sliceContains(allowedFlags, arg) {
+			args[arg] = nil
 		} else {
 			return nil, 0, &ParserError{
 				buffer:  buffer,
-				message: fmt.Sprintf("unexpected argument : %s", identifier),
+				message: fmt.Sprintf("unexpected argument : %s", arg),
 				start:   cursor,
-				end:     identifierEnd,
+				end:     wordEnd,
 			}
 		}
 		cursor = skipWhiteSpaces(buffer, cursor)
@@ -278,10 +280,13 @@ func parseGet(buffer string, start int) (node, *ParserError) {
 	return &getObjectNode{path}, nil
 }
 
-func ParseGetU(buffer string, start int) (node, *ParserError) {
+func parseGetU(buffer string, start int) (node, *ParserError) {
 	path, cursor, err := parsePath(buffer, start)
 	if err != nil {
 		return nil, err
+	}
+	if cursor == len(buffer) {
+		return &getUNode{path, &intLeaf{0}}, nil
 	}
 	u, err := parseInt(buffer, cursor, len(buffer))
 	if err != nil {
@@ -323,13 +328,15 @@ func Parse(buffer string) (node, *ParserError) {
 	}
 
 	dispatch := map[string]func(buffer string, start int) (node, *ParserError){
-		"ls":   parseLs,
-		"get":  parseGet,
-		"getu": ParseGetU,
+		"ls":      parseLs,
+		"get":     parseGet,
+		"getu":    parseGetU,
+		"getslot": parseGetSlot,
 	}
 	parseFunc, ok := dispatch[commandKeyWord]
-	if !ok {
-		panic("command not processed")
-	}
+	if ok {
 	return parseFunc(buffer, cursor)
+	}
+
+	panic("command not processed")
 }
