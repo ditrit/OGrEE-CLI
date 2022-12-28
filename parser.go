@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"unicode"
 )
@@ -136,6 +137,19 @@ func parseIdentifier(buffer string, start int, end int) (string, *ParserError) {
 	return identifier, nil
 }
 
+func parseInt(buffer string, start int, end int) (int, *ParserError) {
+	val, err := strconv.Atoi(buffer[start:end])
+	if err != nil {
+		return 0, &ParserError{
+			buffer:  buffer,
+			message: "integer expected",
+			start:   start,
+			end:     end,
+		}
+	}
+	return val, nil
+}
+
 func parseString(buffer string, start int, end int) (node, *ParserError) {
 	nodesToConcat := []node{}
 	cursor := start
@@ -173,19 +187,20 @@ func parseString(buffer string, start int, end int) (node, *ParserError) {
 	return &concatNode{nodes: nodesToConcat}, nil
 }
 
-func parsePath(buffer string, start int, end int) (node, *ParserError) {
+func parsePath(buffer string, start int) (node, int, *ParserError) {
+	end := findNextWhiteSpace(buffer, start)
 	if start == end {
-		return &pathNode{&strLeaf{"."}, STD}, nil
+		return &pathNode{&strLeaf{"."}, STD}, end, nil
 	}
 	path, err := parseString(buffer, start, end)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	return &pathNode{path, STD}, nil
+	return &pathNode{path, STD}, end, nil
 }
 
 func parseArgs(allowedArgs []string, allowedFlags []string, buffer string, start int) (
-	map[string]any, *ParserError,
+	map[string]any, int, *ParserError,
 ) {
 	args := map[string]any{}
 	cursor := start
@@ -195,7 +210,7 @@ func parseArgs(allowedArgs []string, allowedFlags []string, buffer string, start
 		identifierEnd := findNextWhiteSpace(buffer, cursor)
 		identifier, err := parseIdentifier(buffer, cursor, identifierEnd)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		cursor = skipWhiteSpaces(buffer, cursor+len(identifier))
 		if sliceContains(allowedArgs, identifier) {
@@ -205,7 +220,7 @@ func parseArgs(allowedArgs []string, allowedFlags []string, buffer string, start
 		} else if sliceContains(allowedFlags, identifier) {
 			args[identifier] = nil
 		} else {
-			return nil, &ParserError{
+			return nil, 0, &ParserError{
 				buffer:  buffer,
 				message: fmt.Sprintf("unexpected argument : %s", identifier),
 				start:   cursor,
@@ -214,40 +229,38 @@ func parseArgs(allowedArgs []string, allowedFlags []string, buffer string, start
 		}
 		cursor = skipWhiteSpaces(buffer, cursor)
 	}
-	return args, nil
-}
-
-func firstNonAscii(s string) int {
-	for i := 0; i < len(s); i++ {
-		if s[i] > unicode.MaxASCII {
-			return i
-		}
-	}
-	return -1
+	return args, cursor, nil
 }
 
 func parseLsObj(lsIdx int, buffer string, start int) (node, *ParserError) {
-	args, err := parseArgs([]string{"s", "f"}, []string{"r"}, buffer, start)
+	args, cursor, err := parseArgs([]string{"s", "f"}, []string{"r"}, buffer, start)
 	if err != nil {
 		return nil, err
 	}
-	path, err := parsePath(buffer, start, len(buffer))
+	path, cursor, err := parsePath(buffer, cursor)
 	if err != nil {
 		return nil, err
+	}
+	argsAfter, cursor, err := parseArgs([]string{"s", "f"}, []string{"r"}, buffer, cursor)
+	if err != nil {
+		return nil, err
+	}
+	for arg, value := range argsAfter {
+		args[arg] = value
 	}
 	return &lsObjNode{path, lsIdx, args}, nil // TODO : Adapt lsObjNode
 }
 
 func parseLs(buffer string, start int) (node, *ParserError) {
-	args, err := parseArgs([]string{"s"}, []string{}, buffer, start)
+	args, cursor, err := parseArgs([]string{"s"}, []string{}, buffer, start)
 	if err != nil {
 		return nil, err
 	}
-	path, err := parsePath(buffer, start, len(buffer))
+	path, cursor, err := parsePath(buffer, cursor)
 	if err != nil {
 		return nil, err
 	}
-	afterArgs, err := parseArgs([]string{"s"}, []string{}, buffer, start)
+	afterArgs, cursor, err := parseArgs([]string{"s"}, []string{}, buffer, cursor)
 	if err != nil {
 		return nil, err
 	}
@@ -258,11 +271,32 @@ func parseLs(buffer string, start int) (node, *ParserError) {
 }
 
 func parseGet(buffer string, start int) (node, *ParserError) {
-	path, err := parsePath(buffer, start, len(buffer))
+	path, _, err := parsePath(buffer, start)
 	if err != nil {
 		return nil, err
 	}
 	return &getObjectNode{path}, nil
+}
+
+func ParseGetU(buffer string, start int) (node, *ParserError) {
+	path, cursor, err := parsePath(buffer, start)
+	if err != nil {
+		return nil, err
+	}
+	u, err := parseInt(buffer, cursor, len(buffer))
+	if err != nil {
+		return nil, err
+	}
+	return &getUNode{path, &intLeaf{u}}, nil
+}
+
+func firstNonAscii(s string) int {
+	for i := 0; i < len(s); i++ {
+		if s[i] > unicode.MaxASCII {
+			return i
+		}
+	}
+	return -1
 }
 
 func Parse(buffer string) (node, *ParserError) {
@@ -288,13 +322,14 @@ func Parse(buffer string) (node, *ParserError) {
 		return parseLsObj(lsIdx, buffer, cursor)
 	}
 
-	switch commandKeyWord {
-	case "get":
-		return parseGet(buffer, cursor)
-	case "ls":
-		return parseLs(buffer, cursor)
-	case "getu":
-
+	dispatch := map[string]func(buffer string, start int) (node, *ParserError){
+		"ls":   parseLs,
+		"get":  parseGet,
+		"getu": ParseGetU,
 	}
-	panic("command not processed")
+	parseFunc, ok := dispatch[commandKeyWord]
+	if !ok {
+		panic("command not processed")
+	}
+	return parseFunc(buffer, cursor)
 }
