@@ -99,6 +99,17 @@ func skipWhiteSpaces(buffer string, start int) int {
 	return i
 }
 
+func findNext(buffer string, start int, substringList []string) int {
+	minIdx := len(buffer)
+	for _, s := range substringList {
+		idx := strings.Index(buffer[start:], s)
+		if idx < minIdx {
+			minIdx = idx
+		}
+	}
+	return minIdx
+}
+
 func findNextWhiteSpace(buffer string, start int) int {
 	i := start
 	for buffer[i] != ' ' && buffer[i] != '\t' {
