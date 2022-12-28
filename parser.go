@@ -110,7 +110,7 @@ func findNext(buffer string, start int, substringList []string) int {
 	return minIdx
 }
 
-func findNextWhiteSpace(buffer string, start int) int {
+func findNextSpace(buffer string, start int) int {
 	i := start
 	for buffer[i] != ' ' && buffer[i] != '\t' {
 		i += 1
@@ -199,7 +199,7 @@ func parseString(buffer string, start int, end int) (node, *ParserError) {
 }
 
 func parsePath(buffer string, start int) (node, int, *ParserError) {
-	end := findNextWhiteSpace(buffer, start)
+	end := findNextSpace(buffer, start)
 	if start == end {
 		return &pathNode{&strLeaf{"."}, STD}, end, nil
 	}
@@ -219,14 +219,14 @@ func parseArgs(allowedArgs []string, allowedFlags []string, buffer string, start
 	for buffer[cursor] == '-' {
 		cursor++
 		cursor = skipWhiteSpaces(buffer, cursor)
-		wordEnd := findNextWhiteSpace(buffer, cursor)
+		wordEnd := findNextSpace(buffer, cursor)
 		arg, err := parseWord(buffer, cursor, wordEnd)
 		if err != nil {
 			return nil, 0, err
 		}
 		cursor = skipWhiteSpaces(buffer, cursor+len(arg))
 		if sliceContains(allowedArgs, arg) {
-			valueEnd := findNextWhiteSpace(buffer, cursor)
+			valueEnd := findNextSpace(buffer, cursor)
 			value := buffer[cursor:valueEnd]
 			args[arg] = value
 			cursor = valueEnd
@@ -306,6 +306,14 @@ func parseGetU(buffer string, start int) (node, *ParserError) {
 	return &getUNode{path, &intLeaf{u}}, nil
 }
 
+func parseGetSlot(buffer string, start int) (node, *ParserError) {
+	path, cursor, err := parsePath(buffer, start)
+	if err != nil {
+		return nil, err
+	}
+	slotName, err := parseWord(buffer, cursor, len(buffer))
+	return &getUNode{path, &strLeaf{slotName}}, nil
+}
 func firstNonAscii(s string) int {
 	for i := 0; i < len(s); i++ {
 		if s[i] > unicode.MaxASCII {
@@ -346,7 +354,7 @@ func Parse(buffer string) (node, *ParserError) {
 	}
 	parseFunc, ok := dispatch[commandKeyWord]
 	if ok {
-	return parseFunc(buffer, cursor)
+		return parseFunc(buffer, cursor)
 	}
 
 	panic("command not processed")
