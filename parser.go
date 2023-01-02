@@ -24,7 +24,9 @@ var commands = []string{
 	"camera.move", "camera.wait", "camera.translate",
 	"link", "unlink",
 	"lsten", "lssite", "lsbldg", "lsroom", "lsrack", "lsdev", "lscabinet", "lssensor",
-	"lsac", "lspanel", "lscorridor", "lsenterprise", "tree", "lsog",
+	"lsac", "lspanel", "lscorridor", "lsenterprise",
+	"tree",
+	"lsog",
 	"env",
 	"cd",
 	"pwd",
@@ -50,6 +52,9 @@ var lsCommands = map[string]int{
 	"lscorridor": 9,
 	"lssensor":   10,
 }
+
+var wordRegex = `([A-Za-z_][A-Za-z0-9_\-]*)`
+var valueRegex = `((\S*)|(".*"))`
 
 func sliceContains(slice []string, s string) bool {
 	for _, str := range slice {
@@ -112,7 +117,7 @@ func findNext(buffer string, start int, substringList []string) int {
 
 func findNextSpace(buffer string, start int) int {
 	i := start
-	for buffer[i] != ' ' && buffer[i] != '\t' {
+	for i < len(buffer) && buffer[i] != ' ' && buffer[i] != '\t' {
 		i += 1
 	}
 	return i
@@ -137,7 +142,7 @@ func parseCommandKeyWord(buffer string, start int) (string, *ParserError) {
 
 func parseWord(buffer string, start int, end int) (string, *ParserError) {
 	word := buffer[start:end]
-	if !regexMatch(`[A-Za-z_][A-Za-z0-9_\-]*`, word) {
+	if !regexMatch(wordRegex, word) {
 		return "", &ParserError{
 			buffer:  buffer,
 			message: "Invalid word : " + word,
@@ -198,6 +203,19 @@ func parseString(buffer string, start int, end int) (node, *ParserError) {
 	return &concatNode{nodes: nodesToConcat}, nil
 }
 
+func parseQuotedString(buffer string, start int) (node, *ParserError) {
+	if buffer[start] != '"' {
+		return nil, &ParserError{
+			buffer:  buffer,
+			message: "double quote \" expected",
+			start:   start,
+			end:     start,
+		}
+	}
+	end := strings.Index(buffer[start+1:], "\"") + start + 1
+	return parseString(buffer, start+1, end)
+}
+
 func parsePath(buffer string, start int) (node, int, *ParserError) {
 	end := findNextSpace(buffer, start)
 	if start == end {
@@ -211,18 +229,22 @@ func parsePath(buffer string, start int) (node, int, *ParserError) {
 	return &pathNode{path, STD}, end, nil
 }
 
-func parseArgs(allowedArgs []string, allowedFlags []string, buffer string, start int) (
-	map[string]any, int, *ParserError,
+func parseCommaSeparatedWords(buffer string, start int) (node, *Parser) {
+	
+}
+
+func parseArgsAux(allowedArgs []string, allowedFlags []string, buffer string) (
+	map[string]string, *ParserError,
 ) {
-	args := map[string]any{}
-	cursor := start
-	for buffer[cursor] == '-' {
+	args := map[string]string{}
+	cursor := 0
+	for cursor < len(buffer) && buffer[cursor] == '-' {
 		cursor++
 		cursor = skipWhiteSpaces(buffer, cursor)
 		wordEnd := findNextSpace(buffer, cursor)
 		arg, err := parseWord(buffer, cursor, wordEnd)
 		if err != nil {
-			return nil, 0, err
+			return nil, err
 		}
 		cursor = skipWhiteSpaces(buffer, cursor+len(arg))
 		if sliceContains(allowedArgs, arg) {
@@ -231,56 +253,85 @@ func parseArgs(allowedArgs []string, allowedFlags []string, buffer string, start
 			args[arg] = value
 			cursor = valueEnd
 		} else if sliceContains(allowedFlags, arg) {
-			args[arg] = nil
+			args[arg] = ""
 		} else {
-			return nil, 0, &ParserError{
-				buffer:  buffer,
-				message: fmt.Sprintf("unexpected argument : %s", arg),
-				start:   cursor,
-				end:     wordEnd,
-			}
+			panic("unexpected argument")
 		}
 		cursor = skipWhiteSpaces(buffer, cursor)
 	}
-	return args, cursor, nil
+	return args, nil
+}
+
+func buildSingleArgRegex(allowedArgs []string) string {
+	argNameRegex := strings.Join(allowedArgs, "|")
+	return `([\-]\s*(` + argNameRegex + `)\s+` + valueRegex + `\s*)`
+}
+
+func buildSingleFlagRegex(allowedFlags []string) string {
+	flagNameRegex := strings.Join(allowedFlags, "|")
+	return `([\-]\s*(` + flagNameRegex + `)\s*)`
+}
+
+func parseArgs(allowedArgs []string, allowedFlags []string, buffer string, start int) (
+	map[string]string, int, int, *ParserError,
+) {
+	singleArgRegex := buildSingleArgRegex(allowedArgs)
+	singleFlagRegex := buildSingleFlagRegex(allowedFlags)
+	multipleArgsRegex := "((" + singleArgRegex + ")|(" + singleFlagRegex + "))*"
+
+	endArgsLeft := len(buffer)
+	for endArgsLeft > start && !regexMatch(multipleArgsRegex, buffer[start:endArgsLeft]) {
+		endArgsLeft--
+	}
+	startArgsRight := endArgsLeft
+	for startArgsRight < len(buffer) && !regexMatch(multipleArgsRegex, buffer[startArgsRight:]) {
+		startArgsRight++
+	}
+	argsBuffer := buffer[start:endArgsLeft] + buffer[startArgsRight:]
+	args, err := parseArgsAux(allowedArgs, allowedFlags, argsBuffer)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+	return args, endArgsLeft, startArgsRight, nil
 }
 
 func parseLsObj(lsIdx int, buffer string, start int) (node, *ParserError) {
-	args, cursor, err := parseArgs([]string{"s", "f"}, []string{"r"}, buffer, start)
+	args, pathStart, _, err := parseArgs([]string{"s", "f"}, []string{"r"}, buffer, start)
 	if err != nil {
 		return nil, err
 	}
-	path, cursor, err := parsePath(buffer, cursor)
+	path, _, err := parsePath(buffer, pathStart)
 	if err != nil {
 		return nil, err
 	}
-	argsAfter, cursor, err := parseArgs([]string{"s", "f"}, []string{"r"}, buffer, cursor)
-	if err != nil {
-		return nil, err
+	_, recursive := args["r"]
+	_, sort := args["s"]
+	format, hasFormat := args["f"]
+	if !hasFormat {
+		format = ""
 	}
-	for arg, value := range argsAfter {
-		args[arg] = value
+	var attrList []string
+	if regexMatch(`\(".*",  \)`, format) {
+		attrList = make([]string, 0)
+		cursor := 1 // cursor relative to the format string
+		for cursor < len(format) && 
 	}
-	return &lsObjNode{path, lsIdx, args}, nil // TODO : Adapt lsObjNode
+	return &lsObjNode{path, lsIdx, recursive, sort, format}, nil // TODO : Adapt lsObjNode
 }
 
 func parseLs(buffer string, start int) (node, *ParserError) {
-	args, cursor, err := parseArgs([]string{"s"}, []string{}, buffer, start)
+	args, pathStart, _, err := parseArgs([]string{"s", "f"}, []string{"r"}, buffer, start)
 	if err != nil {
 		return nil, err
 	}
-	path, cursor, err := parsePath(buffer, cursor)
+	path, _, err := parsePath(buffer, pathStart)
 	if err != nil {
 		return nil, err
 	}
-	afterArgs, cursor, err := parseArgs([]string{"s"}, []string{}, buffer, cursor)
-	if err != nil {
-		return nil, err
+	if attr, ok := args["s"]; ok {
+		return &lsAttrGenericNode{path, attr}, nil
 	}
-	for arg, value := range afterArgs {
-		args[arg] = value
-	}
-	return &lsAttrGenericNode{path, args}, nil
+	return &lsNode{path}, nil
 }
 
 func parseGet(buffer string, start int) (node, *ParserError) {
@@ -314,6 +365,73 @@ func parseGetSlot(buffer string, start int) (node, *ParserError) {
 	slotName, err := parseWord(buffer, cursor, len(buffer))
 	return &getUNode{path, &strLeaf{slotName}}, nil
 }
+
+func parseUndraw(buffer string, start int) (node, *ParserError) {
+	if start == len(buffer) {
+		return &undrawNode{nil}, nil
+	}
+	path, _, err := parsePath(buffer, start)
+	if err != nil {
+		return nil, err
+	}
+	return &undrawNode{path}, nil
+}
+
+func parseDraw(buffer string, start int) (node, *ParserError) {
+	args, cursor, rightArgsStart, err := parseArgs([]string{"f"}, []string{}, buffer, start)
+	if err != nil {
+		return nil, err
+	}
+	path, cursor, err := parsePath(buffer, cursor)
+	if err != nil {
+		return nil, err
+	}
+	depth := 0
+	if cursor < rightArgsStart {
+		depth, err = parseInt(buffer, cursor, len(buffer))
+		if err != nil {
+			return nil, err
+		}
+	}
+	return &drawNode{path, depth, args}, nil
+}
+
+func parseHc(buffer string, start int) (node, *ParserError) {
+	path, cursor, err := parsePath(buffer, start)
+	if err != nil {
+		return nil, err
+	}
+	if cursor == len(buffer) {
+		return &hierarchyNode{path, 1}, nil
+	}
+	depth, err := parseInt(buffer, cursor, len(buffer))
+	if err != nil {
+		return nil, err
+	}
+	return &hierarchyNode{path, depth}, nil
+}
+
+func parseUnset(buffer string, start int) (node, *ParserError) {
+	args, cursor, _, err := parseArgs([]string{"f", "v"}, []string{}, buffer, start)
+	if err != nil {
+		return nil, err
+	}
+	if len(args) == 0 {
+		path, _, err := parsePath(buffer, cursor)
+		if err != nil {
+			return nil, err
+		}
+		return &unsetAttrNode{path}, nil
+	}
+	if funcName, ok := args["f"]; ok {
+		return &unsetFuncNode{funcName}, nil
+	}
+	if varName, ok := args["v"]; ok {
+		return &unsetVarNode{varName}, nil
+	}
+	panic("unexpected argument while parsing unset command")
+}
+
 func firstNonAscii(s string) int {
 	for i := 0; i < len(s); i++ {
 		if s[i] > unicode.MaxASCII {
@@ -351,6 +469,10 @@ func Parse(buffer string) (node, *ParserError) {
 		"get":     parseGet,
 		"getu":    parseGetU,
 		"getslot": parseGetSlot,
+		"undraw":  parseUndraw,
+		"draw":    parseDraw,
+		"hc":      parseHc,
+		"unset":   parseUnset,
 	}
 	parseFunc, ok := dispatch[commandKeyWord]
 	if ok {

@@ -6,22 +6,18 @@ import (
 )
 
 func TestParseArgs(t *testing.T) {
-	buffer := "-a 42 -v  -s dazd  -f plouf"
-	args, _, err := parseArgs([]string{"a", "s"}, []string{"v", "f"}, buffer, 0)
+	buffer := "-a 42 -v coucou.plouf -f -s dazd"
+	args, endLeft, startRight, err := parseArgs([]string{"a", "s"}, []string{"v", "f"}, buffer, 0)
 	if err != nil {
 		t.Errorf(err.Error())
 	}
-	if !reflect.DeepEqual(args, map[string]any{"a": "42", "s": "dazd", "v": nil, "f": nil}) {
-		t.Errorf("wrong args returned")
+	if endLeft != 9 {
+		t.Errorf("wrong end position for left arguments : %d", endLeft)
 	}
-}
-
-func TestParsePath(t *testing.T) {
-
-}
-
-func TestParse(t *testing.T) {
-	a := "⌘dsqd"
-	b := []rune(a)
-	println(len(a), len(b))
+	if startRight != 22 {
+		t.Errorf("wrong start position for right arguments : %d", startRight)
+	}
+	if !reflect.DeepEqual(args, map[string]any{"a": "42", "s": "dazd", "v": nil, "f": nil}) {
+		t.Errorf("wrong args returned : %v", args)
+	}
 }

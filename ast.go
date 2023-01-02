@@ -229,30 +229,16 @@ func (n *lsAttrNode) execute() (interface{}, error) {
 }
 
 type lsAttrGenericNode struct {
-	path     node
-	argFlags map[string]interface{}
+	path node
+	attr string
 }
 
 func (n *lsAttrGenericNode) execute() (interface{}, error) {
-	arg := ""
 	path, err := AssertString(&n.path, "Path")
 	if err != nil {
 		return nil, err
 	}
-
-	if len(n.argFlags) > 1 {
-		return nil,
-			fmt.Errorf("This command accepts a single '-s' argument only")
-	}
-
-	if len(n.argFlags) > 0 && n.argFlags["s"] == nil {
-		return nil,
-			fmt.Errorf("This command accepts a single '-s' argument only")
-	} else {
-		arg = n.argFlags["s"].(string)
-	}
-
-	cmd.LSATTR(path, arg)
+	cmd.LSATTR(path, n.attr)
 	return nil, nil
 }
 
@@ -708,9 +694,12 @@ func (n *easyUpdateNode) execute() (interface{}, error) {
 }
 
 type lsObjNode struct {
-	path     node
-	entity   int
-	argFlags map[string]interface{}
+	path      node
+	entity    int
+	recursive bool
+	sort      string
+	format    string
+	attrList  []string
 }
 
 func (n *lsObjNode) execute() (interface{}, error) {
@@ -722,199 +711,41 @@ func (n *lsObjNode) execute() (interface{}, error) {
 	if !ok {
 		return nil, fmt.Errorf("Path should be a string")
 	}
-
-	args := n.argFlags
-	switch len(args) {
-	case 0:
-		return cmd.LSOBJECT(path, n.entity, false), nil
-	case 1:
-		//check for -r or -s or -f
-		if _, ok := args["r"]; ok {
-			if args["r"] != nil {
-				return nil, fmt.Errorf("-r takes no arguments")
-			}
-			return cmd.LSOBJECTRecursive(path, n.entity, false), nil
-
-		} else if _, ok := args["s"]; ok {
-			if IsStringArr(args["s"]) {
-				msg := "Too many arguments supplied, -s only takes one"
-				return nil, fmt.Errorf(msg)
-			}
-			if !IsString(args["s"]) {
-				msg := "Please provide a string argument for '-s'"
-				return nil, fmt.Errorf(msg)
-			}
-
-			objs := cmd.LSOBJECT(path, n.entity, true)
-			sorted := cmd.SortObjects(&objs, args["s"].(string))
-			sorted.Print()
-			return objs, nil
-
-		} else if _, ok := args["f"]; ok {
-			if !IsString(args["f"]) && !IsMapStrInf(args["f"]) {
-				msg := "Please provide a quote enclosed string for '-f' with arguments separated by ':'. Or provide an argument with printf formatting (ie -f (\"%d\",arg1))"
-				return nil,
-					fmt.Errorf(msg)
-			}
-			if IsString(args["f"]) {
-				arr := strings.Split(args["f"].(string), ":")
-
-				objs := cmd.LSOBJECT(path, n.entity, true)
-				cmd.DispWithAttrs(&objs, &arr)
-			}
-
-			if IsMapStrInf(args["f"]) {
-				var format string
-				var arr []string
-
-				//There is only 1 key in the map
-				for i := range args["f"].(map[string]interface{}) {
-					format = i
-				}
-
-				arr = args["f"].(map[string]interface{})[format].([]string)
-				objs := cmd.LSOBJECT(path, n.entity, true)
-				cmd.DispfWithAttrs(format, &objs, &arr)
-
-			}
-
-			return nil, nil
-
-		} else {
-			msg := "Unknown argument received. You can only use '-r' or '-s'"
-			return nil, fmt.Errorf(msg)
-		}
-	case 2:
-		//check for -r and (-s  or -f)
-		var objs []interface{}
-		for i := range args {
-			if !IsAmongValues(i, &[]string{"r", "s", "f"}) {
-				msg := "Unknown argument received." +
-					" You can only use '-r' or '-s' or '-f'"
-				return nil, fmt.Errorf(msg)
-			}
-		}
-
-		if args["r"] != nil {
-			return nil, fmt.Errorf("-r takes no arguments")
-		}
-
-		if _, ok := args["r"]; ok {
-			objs = cmd.LSOBJECTRecursive(path, n.entity, true)
-		} else {
-			objs = cmd.LSOBJECT(path, n.entity, true)
-		}
-
-		if _, ok := args["s"]; ok {
-			if IsString(args["s"]) {
-				sorted := cmd.SortObjects(&objs, args["s"].(string))
-				if _, ok := args["r"]; ok && args["r"] == nil {
-					sorted.Print()
-					return objs, nil
-				} else {
-					objs = sorted.GetData()
-				}
-
-			} else {
-				msg := "Please provide a string argument for '-s'"
-				return nil, fmt.Errorf(msg)
-			}
-
-		}
-
-		if IsString(args["f"]) {
-			attrs := strings.Split(args["f"].(string), ":")
-
-			//We want to display the attribute used for sorting
-			if !IsAmongValues(args["s"], &attrs) && args["s"] != nil {
-				attrs = append([]string{args["s"].(string)}, attrs...)
-			}
-
-			cmd.DispWithAttrs(&objs, &attrs)
-			return objs, nil
-		}
-
-		if IsMapStrInf(args["f"]) {
-			var format string
-			var arr []string
-
-			//There is only 1 key in the map
-			for i := range args["f"].(map[string]interface{}) {
-				format = i
-			}
-
-			arr = args["f"].(map[string]interface{})[format].([]string)
-			cmd.DispfWithAttrs(format, &objs, &arr)
-			return objs, nil
-		}
-		msg := "Please provide a quote enclosed string for '-f' with arguments separated by ':'. Or with printf formatting and attributes"
-		return nil, fmt.Errorf(msg)
-
-	case 3:
-		for i := range args {
-			if !IsAmongValues(i, &[]string{"r", "s", "f"}) {
-				msg := "Unknown argument received." +
-					" You can only use '-r' or '-s' or '-f'"
-				return nil, fmt.Errorf(msg)
-			}
-		}
-
-		if args["r"] != nil {
-			return nil, fmt.Errorf("-r takes no arguments")
-		}
-
-		//Verify then get,sort,display
-		if IsStringArr(args["s"]) {
-			msg := "Too many arguments supplied, -s only takes one"
-			return nil, fmt.Errorf(msg)
-		}
-		if !IsString(args["s"]) {
-			msg := "Please provide a string argument for '-s'"
-			return nil, fmt.Errorf(msg)
-		}
-
-		if IsString(args["f"]) {
-			attrs := strings.Split(args["f"].(string), ":")
-
-			objs := cmd.LSOBJECTRecursive(path, n.entity, true)
-
-			sorted := cmd.SortObjects(&objs, args["s"].(string)).GetData()
-
-			//We want to display the attribute used for sorting
-			if !IsAmongValues(args["s"], &attrs) {
-				attrs = append([]string{args["s"].(string)}, attrs...)
-			}
-
-			cmd.DispWithAttrs(&sorted, &attrs)
-			return sorted, nil
-		}
-
-		if IsMapStrInf(args["f"]) {
-			var format string
-			var arr []string
-
-			objs := cmd.LSOBJECTRecursive(path, n.entity, true)
-			sorted := cmd.SortObjects(&objs, args["s"].(string)).GetData()
-
-			//There is only 1 key in the map
-			for i := range args["f"].(map[string]interface{}) {
-				format = i
-			}
-
-			arr = args["f"].(map[string]interface{})[format].([]string)
-			cmd.DispfWithAttrs(format, &sorted, &arr)
-			return sorted, nil
-		}
-
-		msg := "Please provide a quote enclosed string for '-f' with arguments separated by ':'. Or with printf formatting and attributes"
-		return nil, fmt.Errorf(msg)
-
-	default:
-		//Return err
-		msg := "Too many arguments. You can only use '-r' or '-s'"
-		return nil, fmt.Errorf(msg)
+	var objects []any
+	if n.recursive {
+		objects = cmd.LSOBJECTRecursive(path, n.entity)
+	} else {
+		objects = cmd.LSOBJECT(path, n.entity)
 	}
-
+	if n.sort != "" {
+		objects = cmd.SortObjects(&objects, n.sort).GetData()
+	}
+	if n.format != "" {
+		if !IsString(n.format) && !IsMapStrInf(n.format) {
+			msg := "Please provide a quote enclosed string for '-f' with arguments separated by ':'. Or provide an argument with printf formatting (ie -f (\"%d\",arg1))"
+			return nil, fmt.Errorf(msg)
+		}
+		if n.attrList == nil {
+			arr := strings.Split(n.format, ":")
+			cmd.DispWithAttrs(&objects, &arr)
+		} else {
+			cmd.DispfWithAttrs(n.format, &objects, &n.attrList)
+		}
+	} else {
+		if n.sort != "" {
+			//We want to display the attribute used for sorting
+			attrs := []string{n.sort}
+			cmd.DispWithAttrs(&objects, &attrs)
+		} else {
+			for i := range objects {
+				object, ok := objects[i].(map[string]interface{})
+				if ok && object != nil && object["name"] != nil {
+					println(object["name"].(string))
+				}
+			}
+		}
+	}
+	return objects, nil
 }
 
 type treeNode struct {
@@ -938,7 +769,7 @@ func (n *treeNode) execute() (interface{}, error) {
 type drawNode struct {
 	path     node
 	depth    int
-	argument map[string]interface{}
+	argument map[string]string
 }
 
 func (n *drawNode) execute() (interface{}, error) {
@@ -957,7 +788,7 @@ func (n *drawNode) execute() (interface{}, error) {
 			return nil, fmt.Errorf(msg)
 		}
 		if n.argument["f"] == "n" || n.argument["f"] == "y" {
-			return nil, cmd.Draw(path, n.depth, n.argument["f"].(string))
+			return nil, cmd.Draw(path, n.depth, n.argument["f"])
 		}
 		msg := "Unrecognised argument, only -f and 'y' or 'n' are acceptable"
 		return nil, fmt.Errorf(msg)
@@ -1062,20 +893,21 @@ func (n *updateSelectNode) execute() (interface{}, error) {
 	return nil, nil
 }
 
+type unsetFuncNode struct {
+	funcName string
+}
+
+func (n *unsetFuncNode) execute() (interface{}, error) {
+	delete(funcTable, n.funcName)
+	return nil, nil
+}
+
 type unsetVarNode struct {
-	option string
-	name   string
+	varName string
 }
 
 func (n *unsetVarNode) execute() (interface{}, error) {
-	switch n.option {
-	case "-f":
-		delete(funcTable, n.name)
-	case "-v":
-		dynamicSymbolTable[n.name] = nil
-	default:
-		return nil, fmt.Errorf("unset option needed (-v or -f)")
-	}
+	delete(dynamicSymbolTable, n.varName)
 	return nil, nil
 }
 

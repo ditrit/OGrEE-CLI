@@ -807,7 +807,7 @@ func Env(userVars, userFuncs map[string]interface{}) {
 	}
 }
 
-func LSOBJECT(x string, entity int, silence bool) []interface{} {
+func LSOBJECT(x string, entity int) []interface{} {
 	var obj map[string]interface{}
 	var Path string
 
@@ -830,8 +830,6 @@ func LSOBJECT(x string, entity int, silence bool) []interface{} {
 		}
 	}
 
-	objects := []interface{}{}
-
 	//Retrieve the desired objects under the working path
 	entStr := EntityToString(entity) + "s"
 	r, e := models.Send("GET", Path+"/"+entStr, GetKey(), nil)
@@ -839,20 +837,7 @@ func LSOBJECT(x string, entity int, silence bool) []interface{} {
 	if parsed == nil {
 		return nil
 	}
-
-	//Data verification and print block
-	objects = GetRawObjects(parsed)
-	if silence == false {
-		for i := range objects {
-			if object, ok := objects[i].(map[string]interface{}); ok {
-				if object["name"] != nil {
-					println(object["name"].(string))
-				}
-			}
-		}
-	}
-
-	return objects
+	return GetRawObjects(parsed)
 }
 
 func GetByAttr(x string, u interface{}) {
@@ -2858,7 +2843,7 @@ func InformUnity(caller string, entity int, data map[string]interface{}) error {
 }
 
 // x is path
-func LSOBJECTRecursive(x string, entity int, silence bool) []interface{} {
+func LSOBJECTRecursive(x string, entity int) []interface{} {
 	var obj map[string]interface{}
 	var Path string
 
@@ -2867,16 +2852,7 @@ func LSOBJECTRecursive(x string, entity int, silence bool) []interface{} {
 			r, e := models.Send("GET",
 				State.APIURL+"/api/tenants", GetKey(), nil)
 			obj = ParseResponse(r, e, "Get Tenants")
-			arr := LoadArrFromResp(obj, "objects")
-			if !silence {
-				for _, tenantInf := range arr {
-					if tenant, _ := LoadObjectFromInf(tenantInf); tenant != nil {
-						println(tenant["name"].(string))
-					}
-				}
-			}
-
-			return arr
+			return LoadArrFromResp(obj, "objects")
 		} else {
 			//Return nothing
 			return nil
@@ -2927,18 +2903,7 @@ func LSOBJECTRecursive(x string, entity int, silence bool) []interface{} {
 	//println(entities)
 	//println(obi)
 	//println("WANT:", EntityToString(entity))
-	res := lsobjHelperRecursive(State.APIURL, idToSend, obi, entity)
-	if !silence {
-		for i := range res {
-			if item, ok := res[i].(map[string]interface{}); ok {
-				if item != nil && item["name"] != nil {
-					println(item["name"].(string))
-				}
-			}
-		}
-	}
-
-	return res
+	return lsobjHelperRecursive(State.APIURL, idToSend, obi, entity)
 	//return nil
 }
 
