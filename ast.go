@@ -698,8 +698,8 @@ type lsObjNode struct {
 	entity    int
 	recursive bool
 	sort      string
-	format    string
 	attrList  []string
+	format    string
 }
 
 func (n *lsObjNode) execute() (interface{}, error) {
@@ -720,22 +720,17 @@ func (n *lsObjNode) execute() (interface{}, error) {
 	if n.sort != "" {
 		objects = cmd.SortObjects(&objects, n.sort).GetData()
 	}
-	if n.format != "" {
-		if !IsString(n.format) && !IsMapStrInf(n.format) {
-			msg := "Please provide a quote enclosed string for '-f' with arguments separated by ':'. Or provide an argument with printf formatting (ie -f (\"%d\",arg1))"
-			return nil, fmt.Errorf(msg)
-		}
-		if n.attrList == nil {
-			arr := strings.Split(n.format, ":")
-			cmd.DispWithAttrs(&objects, &arr)
-		} else {
+	if n.attrList != nil {
+		if n.format != "" {
 			cmd.DispfWithAttrs(n.format, &objects, &n.attrList)
+		} else {
+			cmd.DispWithAttrs(&objects, &n.attrList)
 		}
 	} else {
 		if n.sort != "" {
 			//We want to display the attribute used for sorting
-			attrs := []string{n.sort}
-			cmd.DispWithAttrs(&objects, &attrs)
+			attrList := append(n.attrList, n.sort)
+			cmd.DispWithAttrs(&objects, &attrList)
 		} else {
 			for i := range objects {
 				object, ok := objects[i].(map[string]interface{})
