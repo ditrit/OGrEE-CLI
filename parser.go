@@ -184,11 +184,11 @@ func parseWord(buffer string, start int, end int) (string, int, *ParserError) {
 }
 
 func parseSeparatedWords(sep byte, buffer string, start int, end int) ([]string, *ParserError) {
-	var word string
-	var err *ParserError
 	cursor := start
 	words := make([]string, 0)
 	for {
+		var word string
+		var err *ParserError
 		word, cursor, err = parseWord(buffer, cursor, end)
 		if err != nil {
 			return nil, err
@@ -201,7 +201,7 @@ func parseSeparatedWords(sep byte, buffer string, start int, end int) ([]string,
 		if buffer[cursor] != sep {
 			return nil, &ParserError{
 				buffer:  buffer,
-				message: "comma expected",
+				message: string(sep) + " expected",
 				start:   cursor,
 				end:     cursor,
 			}
@@ -209,6 +209,34 @@ func parseSeparatedWords(sep byte, buffer string, start int, end int) ([]string,
 		cursor++
 	}
 	return words, nil
+}
+
+func parseSeparatedPaths(sep byte, buffer string, start int, end int) ([]node, *ParserError) {
+	cursor := start
+	paths := make([]node, 0)
+	for {
+		var path node
+		var err *ParserError
+		path, cursor, err = parsePath(buffer, cursor, end)
+		if err != nil {
+			return nil, err
+		}
+		paths = append(paths, path)
+		cursor = skipWhiteSpaces(buffer, cursor, end)
+		if cursor == end {
+			break
+		}
+		if buffer[cursor] != sep {
+			return nil, &ParserError{
+				buffer:  buffer,
+				message: string(sep) + " expected",
+				start:   cursor,
+				end:     cursor,
+			}
+		}
+		cursor++
+	}
+	return paths, nil
 }
 
 func parseInt(buffer string, start int, end int) (int, *ParserError) {
@@ -585,6 +613,30 @@ func parseDelete(buffer string, start int) (node, *ParserError) {
 	return &deleteObjNode{path}, nil
 }
 
+func parseEqual(buffer string, start int) (node, *ParserError) {
+	if buffer[start] == '{' {
+		endBracket := findClosing(buffer, start, len(buffer))
+		if endBracket == len(buffer) {
+			return nil, &ParserError{
+				buffer:  buffer,
+				message: "{ opened but never closed",
+				start:   start,
+				end:     len(buffer),
+			}
+		}
+		paths, err := parseSeparatedPaths(',', buffer, start+1, endBracket)
+		if err != nil {
+			return nil, err
+		}
+		return &selectChildrenNode{paths}, nil
+	}
+	path, _, err := parsePath(buffer, start, len(buffer))
+	if err != nil {
+		return nil, err
+	}
+	return &selectObjectNode{path}, nil
+}
+
 func firstNonAscii(s string) int {
 	for i := 0; i < len(s); i++ {
 		if s[i] > unicode.MaxASCII {
@@ -629,6 +681,7 @@ func Parse(buffer string) (node, *ParserError) {
 		"unset":    parseUnset,
 		"env":      parseEnv,
 		"-":        parseDelete,
+		"=":        parseEqual,
 	}
 	parseFunc, ok := dispatch[commandKeyWord]
 	if ok {
