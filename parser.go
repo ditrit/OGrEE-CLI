@@ -104,22 +104,22 @@ func skipWhiteSpaces(buffer string, start int, end int) int {
 
 func findNext(substring string, buffer string, start int, end int) int {
 	idx := strings.Index(buffer[start:end], substring)
-	if idx < end {
+	if idx != -1 {
 		return idx
 	}
 	return end
 }
 
-func findNextAmong(substringList []string, buffer string, start int, end int) int {
-	minIdx := end
-	for _, s := range substringList {
-		idx := strings.Index(buffer[start:end], s)
-		if idx < minIdx {
-			minIdx = idx
-		}
-	}
-	return minIdx
-}
+// func findNextAmong(substringList []string, buffer string, start int, end int) int {
+// 	minIdx := end
+// 	for _, s := range substringList {
+// 		idx := strings.Index(buffer[start:end], s)
+// 		if idx < minIdx {
+// 			minIdx = idx
+// 		}
+// 	}
+// 	return minIdx
+// }
 
 func findClosing(buffer string, start int, end int) int {
 	openToClose := map[byte]byte{'(': ')', '{': '}', '[': ']'}
@@ -149,7 +149,6 @@ func parseCommandKeyWord(buffer string, start int) (string, int, *ParserError) {
 	for end < len(buffer) && sliceContainsPrefix(commands, buffer[start:end]) {
 		end++
 	}
-	end--
 	if end == start {
 		return "", 0, &ParserError{
 			buffer:  buffer,
@@ -178,10 +177,12 @@ func parseWord(buffer string, start int, end int) (string, int, *ParserError) {
 }
 
 func parseSeparatedWords(sep byte, buffer string, start int, end int) ([]string, *ParserError) {
+	var word string
+	var err *ParserError
 	cursor := start
 	words := make([]string, 0)
 	for {
-		word, cursor, err := parseWord(buffer, cursor, end)
+		word, cursor, err = parseWord(buffer, cursor, end)
 		if err != nil {
 			return nil, err
 		}
@@ -217,6 +218,8 @@ func parseInt(buffer string, start int, end int) (int, *ParserError) {
 }
 
 func parseString(buffer string, start int, end int) (node, *ParserError) {
+	var varName string
+	var err *ParserError
 	nodesToConcat := []node{}
 	cursor := start
 	for cursor < end {
@@ -237,8 +240,7 @@ func parseString(buffer string, start int, end int) (node, *ParserError) {
 				end:     end,
 			}
 		}
-		varName, cursor, err := parseWord(buffer, varIndex+2, endVarIndex)
-
+		varName, cursor, err = parseWord(buffer, varIndex+2, endVarIndex)
 		if err != nil {
 			return nil, err
 		}
@@ -253,18 +255,18 @@ func parseString(buffer string, start int, end int) (node, *ParserError) {
 	return &concatNode{nodes: nodesToConcat}, nil
 }
 
-func parseQuotedString(buffer string, start int, end int) (node, *ParserError) {
-	if buffer[start] != '"' {
-		return nil, &ParserError{
-			buffer:  buffer,
-			message: "double quote \" expected",
-			start:   start,
-			end:     start,
-		}
-	}
-	end = findNext("\"", buffer, start+1, end)
-	return parseString(buffer, start+1, end)
-}
+// func parseQuotedString(buffer string, start int, end int) (node, *ParserError) {
+// 	if buffer[start] != '"' {
+// 		return nil, &ParserError{
+// 			buffer:  buffer,
+// 			message: "double quote \" expected",
+// 			start:   start,
+// 			end:     start,
+// 		}
+// 	}
+// 	end = findNext("\"", buffer, start+1, end)
+// 	return parseString(buffer, start+1, end)
+// }
 
 func parsePath(buffer string, start int, end int) (node, int, *ParserError) {
 	endPath := findNext(" ", buffer, start, end)
@@ -300,35 +302,33 @@ func parseArgValue(buffer string, start int, end int) (string, int, *ParserError
 	return buffer[start:endValue], endValueAndSpaces, nil
 }
 
-func parseArgsAux(allowedArgs []string, allowedFlags []string, buffer string, start int, end int) (
-	map[string]string, *ParserError,
+func parseSingleArg(allowedArgs []string, allowedFlags []string, buffer string, start int, end int) (
+	string, string, int, *ParserError,
 ) {
-	args := map[string]string{}
-	cursor := 0
-	for cursor < len(buffer) && buffer[cursor] == '-' {
-		cursor++
-		cursor = skipWhiteSpaces(buffer, cursor, end)
-		wordEnd := findNext(" ", buffer, cursor, len(buffer))
-		arg, cursor, err := parseWord(buffer, cursor, wordEnd)
-		if err != nil {
-			return nil, err
-		}
-		cursor = skipWhiteSpaces(buffer, cursor, end)
-		if sliceContains(allowedArgs, arg) {
-			var value string
-			value, cursor, err = parseArgValue(buffer, cursor, end)
-			if err != nil {
-				return nil, err
-			}
-			args[arg] = value
-		} else if sliceContains(allowedFlags, arg) {
-			args[arg] = ""
-		} else {
-			panic("unexpected argument")
-		}
-		cursor = skipWhiteSpaces(buffer, cursor, end)
+	cursor := start
+	cursor++ // skip dash
+	cursor = skipWhiteSpaces(buffer, cursor, end)
+	wordEnd := findNext(" ", buffer, cursor, end)
+	arg, cursor, err := parseWord(buffer, cursor, wordEnd)
+	if err != nil {
+		return "", "", 0, err
 	}
-	return args, nil
+	cursor = skipWhiteSpaces(buffer, cursor, end)
+
+	var value string
+	if sliceContains(allowedArgs, arg) {
+		value, cursor, err = parseArgValue(buffer, cursor, end)
+		if err != nil {
+			return "", "", 0, err
+		}
+	} else if sliceContains(allowedFlags, arg) {
+		value = ""
+	} else {
+		panic("unexpected argument")
+	}
+
+	cursor = skipWhiteSpaces(buffer, cursor, end)
+	return arg, value, cursor, nil
 }
 
 func buildSingleArgRegex(allowedArgs []string) string {
@@ -361,9 +361,17 @@ func parseArgs(allowedArgs []string, allowedFlags []string, buffer string, start
 		startArgsRight++
 	}
 	argsBuffer := buffer[start:endArgsLeft] + buffer[startArgsRight:]
-	args, err := parseArgsAux(allowedArgs, allowedFlags, argsBuffer, 0, len(argsBuffer))
-	if err != nil {
-		return nil, 0, 0, err
+
+	args := map[string]string{}
+	cursor := start
+	for cursor < len(buffer) && buffer[cursor] == '-' {
+		arg, value, newCursor, err := parseSingleArg(
+			allowedArgs, allowedFlags, argsBuffer, cursor, len(argsBuffer))
+		if err != nil {
+			return nil, 0, 0, err
+		}
+		args[arg] = value
+		cursor = newCursor
 	}
 	return args, endArgsLeft, startArgsRight, nil
 }
@@ -378,7 +386,7 @@ func parseLsObj(lsIdx int, buffer string, start int) (node, *ParserError) {
 		return nil, err
 	}
 	_, recursive := args["r"]
-	sort, _ := args["s"]
+	sort := args["s"]
 
 	//msg := "Please provide a quote enclosed string for '-f' with arguments separated by ':'. Or provide an argument with printf formatting (ie -f (\"%d\",arg1))"
 
@@ -448,6 +456,9 @@ func parseGetSlot(buffer string, start int) (node, *ParserError) {
 		return nil, err
 	}
 	slotName, _, err := parseWord(buffer, cursor, len(buffer))
+	if err != nil {
+		return nil, err
+	}
 	return &getUNode{path, &strLeaf{slotName}}, nil
 }
 
