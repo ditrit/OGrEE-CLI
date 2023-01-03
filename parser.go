@@ -110,16 +110,16 @@ func findNext(substring string, buffer string, start int, end int) int {
 	return end
 }
 
-// func findNextAmong(substringList []string, buffer string, start int, end int) int {
-// 	minIdx := end
-// 	for _, s := range substringList {
-// 		idx := strings.Index(buffer[start:end], s)
-// 		if idx < minIdx {
-// 			minIdx = idx
-// 		}
-// 	}
-// 	return minIdx
-// }
+func findNextAmong(substringList []string, buffer string, start int, end int) int {
+	minIdx := end
+	for _, s := range substringList {
+		idx := strings.Index(buffer[start:end], s)
+		if idx < minIdx {
+			minIdx = idx
+		}
+	}
+	return minIdx
+}
 
 func findClosing(buffer string, start int, end int) int {
 	openToClose := map[byte]byte{'(': ')', '{': '}', '[': ']'}
@@ -142,6 +142,13 @@ func findClosing(buffer string, start int, end int) int {
 		}
 	}
 	return -1
+}
+
+func parseExact(word string, buffer string, start int, end int) (bool, int) {
+	if start+len(word) < end && buffer[start:start+len(word)] == word {
+		return true, start + len(word)
+	}
+	return false, start
 }
 
 func parseCommandKeyWord(buffer string, start int) (string, int, *ParserError) {
@@ -543,6 +550,41 @@ func parseUnset(buffer string, start int) (node, *ParserError) {
 	panic("unexpected argument while parsing unset command")
 }
 
+func parseEnv(buffer string, start int) (node, *ParserError) {
+	endArg := findNextAmong([]string{" ", "="}, buffer, start, len(buffer))
+	arg, cursor, err := parseWord(buffer, start, endArg)
+	if err != nil {
+		return nil, err
+	}
+	cursor = skipWhiteSpaces(buffer, cursor, len(buffer))
+	if buffer[cursor] != '=' {
+		return nil, &ParserError{
+			buffer:  buffer,
+			message: "= expected",
+			start:   cursor,
+			end:     cursor,
+		}
+	}
+	cursor++
+	value, err := parseString(buffer, cursor, len(buffer))
+	if err != nil {
+		return nil, err
+	}
+	return &setEnvNode{arg, value}, nil
+}
+
+func parseDelete(buffer string, start int) (node, *ParserError) {
+	deleteSelection, _ := parseExact("selection", buffer, start, len(buffer))
+	if deleteSelection {
+		return &deleteSelectionNode{}, nil
+	}
+	path, _, err := parsePath(buffer, start, len(buffer))
+	if err != nil {
+		return nil, err
+	}
+	return &deleteObjNode{path}, nil
+}
+
 func firstNonAscii(s string) int {
 	for i := 0; i < len(s); i++ {
 		if s[i] > unicode.MaxASCII {
@@ -582,9 +624,11 @@ func Parse(buffer string) (node, *ParserError) {
 		"getslot":  parseGetSlot,
 		"undraw":   parseUndraw,
 		"draw":     parseDraw,
+		"drawable": parseDrawable,
 		"hc":       parseHc,
 		"unset":    parseUnset,
-		"drawable": parseDrawable,
+		"env":      parseEnv,
+		"-":        parseDelete,
 	}
 	parseFunc, ok := dispatch[commandKeyWord]
 	if ok {
