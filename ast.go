@@ -353,8 +353,8 @@ func (n *isEntityDrawableNode) execute() (interface{}, error) {
 }
 
 type isAttrDrawableNode struct {
-	path   node
-	factor node
+	path node
+	attr string
 }
 
 func (n *isAttrDrawableNode) execute() (interface{}, error) {
@@ -366,14 +366,7 @@ func (n *isAttrDrawableNode) execute() (interface{}, error) {
 	if !ok {
 		return nil, fmt.Errorf("Object path should be a string")
 	}
-	attrInf, err := n.factor.execute()
-	if err != nil {
-		return nil, err
-	}
-	if _, ok := attrInf.(string); !ok {
-		return nil, fmt.Errorf("Attribute operand is invalid")
-	}
-	return cmd.IsAttrDrawable(path, attrInf.(string), nil, false), nil
+	return cmd.IsAttrDrawable(path, n.attr, nil, false), nil
 }
 
 type getObjectNode struct {

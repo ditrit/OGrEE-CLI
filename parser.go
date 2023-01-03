@@ -492,6 +492,21 @@ func parseDraw(buffer string, start int) (node, *ParserError) {
 	return &drawNode{path, depth, args}, nil
 }
 
+func parseDrawable(buffer string, start int) (node, *ParserError) {
+	path, cursor, err := parsePath(buffer, start, len(buffer))
+	if err != nil {
+		return nil, err
+	}
+	if cursor == len(buffer) {
+		return &isEntityDrawableNode{path}, nil
+	}
+	attrName, _, err := parseWord(buffer, cursor, len(buffer))
+	if err != nil {
+		return nil, err
+	}
+	return &isAttrDrawableNode{path, attrName}, nil
+}
+
 func parseHc(buffer string, start int) (node, *ParserError) {
 	path, cursor, err := parsePath(buffer, start, len(buffer))
 	if err != nil {
@@ -561,14 +576,15 @@ func Parse(buffer string) (node, *ParserError) {
 	}
 
 	dispatch := map[string]func(buffer string, start int) (node, *ParserError){
-		"ls":      parseLs,
-		"get":     parseGet,
-		"getu":    parseGetU,
-		"getslot": parseGetSlot,
-		"undraw":  parseUndraw,
-		"draw":    parseDraw,
-		"hc":      parseHc,
-		"unset":   parseUnset,
+		"ls":       parseLs,
+		"get":      parseGet,
+		"getu":     parseGetU,
+		"getslot":  parseGetSlot,
+		"undraw":   parseUndraw,
+		"draw":     parseDraw,
+		"hc":       parseHc,
+		"unset":    parseUnset,
+		"drawable": parseDrawable,
 	}
 	parseFunc, ok := dispatch[commandKeyWord]
 	if ok {
