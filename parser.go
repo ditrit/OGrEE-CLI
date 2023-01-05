@@ -7,51 +7,23 @@ import (
 	"unicode"
 )
 
-var commands = []string{
-	"get", "getu", "getslot",
-	"hc",
-	"+", "-", "=",
-	"print",
-	"unset",
-	"selection",
-	".cmds",
-	".template",
-	".var",
-	"ui.delay", "ui.wireframe", "ui.infos", "ui.debug", "ui.highlight", "ui.hl",
-	"camera.move", "camera.wait", "camera.translate",
-	"link", "unlink",
-	"lsten", "lssite", "lsbldg", "lsroom", "lsrack", "lsdev", "lscabinet", "lssensor",
-	"lsac", "lspanel", "lscorridor", "lsenterprise",
-	"tree",
-	"lsog",
-	"env",
-	"cd",
-	"pwd",
-	"clear",
-	"grep",
-	"ls",
-	"exit",
-	"len",
-	"man",
-	"drawable", "draw", "undraw",
-}
-
-var lsCommands = map[string]int{
-	"lsten":      0,
-	"lssite":     1,
-	"lsbldg":     2,
-	"lsroom":     3,
-	"lsrack":     4,
-	"lsdev":      5,
-	"lsac":       6,
-	"lspanel":    7,
-	"lscabinet":  8,
-	"lscorridor": 9,
-	"lssensor":   10,
-}
-
 var commandDispatch map[string]func(frame Frame) (node, *ParserError)
+var lsCommands = []string{"lsten", "lssite", "lsbldg", "lsroom", "lsrack", "lsdev", "lsac",
+	"lspanel", "lscabinet", "lscorridor", "lssensor"}
 var noArgsCommands map[string]node
+
+var manCommands = []string{
+	"get", "getu", "getslot",
+	"+", "-", "=",
+	".cmds", ".template", ".var",
+	"ui", "camera",
+	"link", "unlink",
+	"lsten", "lssite", "lsbldg", "lsroom", "lsrack", "lsdev", "lsac",
+	"lspanel", "lscabinet", "lscorridor", "lssensor", "lsenterprise",
+	"drawable", "draw", "undraw",
+	"tree", "lsog", "env", "cd", "pwd", "clear", "grep", "ls", "exit", "len", "man", "hc",
+	"print", "unset", "selection",
+}
 
 var wordRegex = `([A-Za-z_][A-Za-z0-9_\-]*)`
 var valueRegex = `((\S*)|(".*")|(\(.*\)))`
@@ -65,13 +37,13 @@ func sliceContains(slice []string, s string) bool {
 	return false
 }
 
-func sliceContainsPrefix(slice []string, prefix string) bool {
-	for _, str := range slice {
-		if strings.HasPrefix(str, prefix) {
-			return true
+func indexOf(arr []string, val string) int {
+	for pos, v := range arr {
+		if v == val {
+			return pos
 		}
 	}
-	return false
+	return -1
 }
 
 func regexMatch(regex string, str string) bool {
@@ -237,11 +209,26 @@ func parseExact(word string, frame Frame) (bool, int) {
 	return false, frame.start
 }
 
+func isCommandPrefix(prefix string) bool {
+	for command := range commandDispatch {
+		if strings.HasPrefix(command, prefix) {
+			return true
+		}
+	}
+	for command := range noArgsCommands {
+		if strings.HasPrefix(command, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
 func parseCommandKeyWord(frame Frame) (string, int, *ParserError) {
 	commandEnd := frame.start + 1
-	for commandEnd < frame.end && sliceContainsPrefix(commands, frame.strUntil(commandEnd)) {
+	for commandEnd < frame.end && isCommandPrefix(frame.strUntil(commandEnd)) {
 		commandEnd++
 	}
+	commandEnd--
 	if commandEnd == frame.start {
 		return "", 0, newParserError(frame, "command name expected")
 	}
@@ -806,6 +793,16 @@ func parsePrint(frame Frame) (node, *ParserError) {
 	return &printNode{str}, nil
 }
 
+func parseMan(frame Frame) (node, *ParserError) {
+	cursor := skipWhiteSpaces(frame)
+	endCommandName := findNext(" ", frame.from(cursor))
+	commandName := frame.buf[cursor:endCommandName]
+	if !sliceContains(manCommands, commandName) {
+		return nil, newParserError(frame, "parsing command name")
+	}
+	return &helpNode{commandName}, nil
+}
+
 func parseCommand(frame Frame) (node, *ParserError) {
 	cursor := skipWhiteSpaces(frame)
 	commandKeyWord, cursor, err := parseCommandKeyWord(frame.from(cursor))
@@ -814,7 +811,8 @@ func parseCommand(frame Frame) (node, *ParserError) {
 	}
 	println("Command key word :", commandKeyWord)
 	cursor = skipWhiteSpaces(frame.from(cursor))
-	if lsIdx, ok := lsCommands[commandKeyWord]; ok {
+
+	if lsIdx := indexOf(lsCommands, commandKeyWord); lsIdx != -1 {
 		return parseLsObj(lsIdx, frame.from(cursor))
 	}
 	parseFunc, ok := commandDispatch[commandKeyWord]
@@ -859,6 +857,7 @@ func Parse(buffer string) (node, *ParserError) {
 		"link:":      parseLink,
 		"unlink":     parseUnlink,
 		"print":      parsePrint,
+		"man":        parseMan,
 	}
 	noArgsCommands = map[string]node{
 		"selection":    &selectNode{},
