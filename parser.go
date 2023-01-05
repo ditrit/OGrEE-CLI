@@ -51,10 +51,10 @@ var lsCommands = map[string]int{
 }
 
 var commandDispatch map[string]func(frame Frame) (node, *ParserError)
-var wordRegex = `([A-Za-z_][A-Za-z0-9_\-]*)`
+var noArgsCommands map[string]node
 
-// var valueRegex = `( (\S*) | (".*") | (\(.*\)) )`
-var valueRegex = `(\S*)`
+var wordRegex = `([A-Za-z_][A-Za-z0-9_\-]*)`
+var valueRegex = `((\S*)|(".*")|(\(.*\)))`
 
 func sliceContains(slice []string, s string) bool {
 	for _, str := range slice {
@@ -713,6 +713,22 @@ func parseVar(frame Frame) (node, *ParserError) {
 	return &assignNode{varName, value}, nil
 }
 
+func parseLoad(frame Frame) (node, *ParserError) {
+	filePath, err := parseString(frame)
+	if err != nil {
+		return nil, err.extendMessage("parsing file path")
+	}
+	return &loadNode{filePath}, nil
+}
+
+func parseTemplate(frame Frame) (node, *ParserError) {
+	filePath, err := parseString(frame)
+	if err != nil {
+		return nil, err.extendMessage("parsing file path")
+	}
+	return &loadTemplateNode{filePath}, nil
+}
+
 func parseCommand(frame Frame) (node, *ParserError) {
 	cursor := skipWhiteSpaces(frame)
 	commandKeyWord, cursor, err := parseCommandKeyWord(frame.from(cursor))
@@ -727,6 +743,10 @@ func parseCommand(frame Frame) (node, *ParserError) {
 	parseFunc, ok := commandDispatch[commandKeyWord]
 	if ok {
 		return parseFunc(frame.from(cursor))
+	}
+	result, ok := noArgsCommands[commandKeyWord]
+	if ok {
+		return result, nil
 	}
 	panic("command not processed")
 }
@@ -743,19 +763,31 @@ func firstNonAscii(frame Frame) int {
 func Parse(buffer string) (node, *ParserError) {
 	frame := newFrame(buffer)
 	commandDispatch = map[string]func(frame Frame) (node, *ParserError){
-		"ls":       parseLs,
-		"get":      parseGet,
-		"getu":     parseGetU,
-		"getslot":  parseGetSlot,
-		"undraw":   parseUndraw,
-		"draw":     parseDraw,
-		"drawable": parseDrawable,
-		"hc":       parseHc,
-		"unset":    parseUnset,
-		"env":      parseEnv,
-		"-":        parseDelete,
-		"=":        parseEqual,
-		".var:":    parseVar,
+		"ls":         parseLs,
+		"get":        parseGet,
+		"getu":       parseGetU,
+		"getslot":    parseGetSlot,
+		"undraw":     parseUndraw,
+		"draw":       parseDraw,
+		"drawable":   parseDrawable,
+		"hc":         parseHc,
+		"unset":      parseUnset,
+		"env":        parseEnv,
+		"-":          parseDelete,
+		"=":          parseEqual,
+		".var:":      parseVar,
+		".cmds:":     parseLoad,
+		".template:": parseTemplate,
+	}
+	noArgsCommands = map[string]node{
+		"selection":    &selectNode{},
+		"clear":        &clrNode{},
+		"grep":         &grepNode{},
+		"lsog":         &lsogNode{},
+		"lsenterprise": &lsenterpriseNode{},
+		"env":          &envNode{},
+		"pwd":          &pwdNode{},
+		"exit":         &exitNode{},
 	}
 	firstNonAsciiIdx := firstNonAscii(frame)
 	if firstNonAsciiIdx < frame.end {
