@@ -798,6 +798,14 @@ func parseUnlink(frame Frame) (node, *ParserError) {
 	return &unlinkObjectNode{sourcePath, nil}, nil
 }
 
+func parsePrint(frame Frame) (node, *ParserError) {
+	str, err := parseString(frame)
+	if err != nil {
+		return nil, err.extendMessage("parsing message to print")
+	}
+	return &printNode{str}, nil
+}
+
 func parseCommand(frame Frame) (node, *ParserError) {
 	cursor := skipWhiteSpaces(frame)
 	commandKeyWord, cursor, err := parseCommandKeyWord(frame.from(cursor))
@@ -850,6 +858,7 @@ func Parse(buffer string) (node, *ParserError) {
 		"len":        parseLen,
 		"link:":      parseLink,
 		"unlink":     parseUnlink,
+		"print":      parsePrint,
 	}
 	noArgsCommands = map[string]node{
 		"selection":    &selectNode{},
