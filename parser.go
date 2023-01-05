@@ -779,6 +779,25 @@ func parseLink(frame Frame) (node, *ParserError) {
 	return &linkObjectNode{sourcePath, destPath, nil}, nil
 }
 
+func parseUnlink(frame Frame) (node, *ParserError) {
+	frames := splitFrameOn("@", frame)
+	if len(frames) < 1 || len(frames) > 2 {
+		return nil, newParserError(frame, "too many fields given (separated by @)")
+	}
+	sourcePath, _, err := parsePhysicalPath(frames[0])
+	if err != nil {
+		return nil, err.extendMessage("parsing source path (physical)")
+	}
+	if len(frames) == 2 {
+		destPath, _, err := parsePhysicalPath(frames[1])
+		if err != nil {
+			return nil, err.extendMessage("parsing destination path (physical)")
+		}
+		return &unlinkObjectNode{sourcePath, destPath}, nil
+	}
+	return &unlinkObjectNode{sourcePath, nil}, nil
+}
+
 func parseCommand(frame Frame) (node, *ParserError) {
 	cursor := skipWhiteSpaces(frame)
 	commandKeyWord, cursor, err := parseCommandKeyWord(frame.from(cursor))
@@ -830,6 +849,7 @@ func Parse(buffer string) (node, *ParserError) {
 		".template:": parseTemplate,
 		"len":        parseLen,
 		"link:":      parseLink,
+		"unlink":     parseUnlink,
 	}
 	noArgsCommands = map[string]node{
 		"selection":    &selectNode{},
