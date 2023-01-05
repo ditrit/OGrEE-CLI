@@ -219,6 +219,17 @@ func findClosing(frame Frame) int {
 	return -1
 }
 
+func splitFrameOn(sep string, frame Frame) []Frame {
+	bufs := strings.Split(frame.buf, sep)
+	frames := []Frame{}
+	cursor := frame.start
+	for _, buf := range bufs {
+		frames = append(frames, frame.new(cursor, cursor+len(buf)))
+		cursor += len(sep)
+	}
+	return frames
+}
+
 func parseExact(word string, frame Frame) (bool, int) {
 	if frame.start+len(word) < frame.end && frame.strUntil(frame.start+len(word)) == word {
 		return true, frame.start + len(word)
@@ -350,7 +361,7 @@ func parseString(frame Frame) (node, *ParserError) {
 // 	return parseString(buffer, start+1, end)
 // }
 
-func parsePath(frame Frame) (node, int, *ParserError) {
+func parseGenericPath(mode PathMode, frame Frame) (node, int, *ParserError) {
 	endPath := findNext(" ", frame)
 	if frame.start == endPath {
 		return &pathNode{&strLeaf{"."}, STD}, frame.end, nil
@@ -360,7 +371,15 @@ func parsePath(frame Frame) (node, int, *ParserError) {
 		return nil, 0, err.extend(frame, "parsing path")
 	}
 	cursor := skipWhiteSpaces(frame.from(endPath))
-	return &pathNode{path, STD}, cursor, nil
+	return &pathNode{path, mode}, cursor, nil
+}
+
+func parsePath(frame Frame) (node, int, *ParserError) {
+	return parseGenericPath(STD, frame)
+}
+
+func parsePhysicalPath(frame Frame) (node, int, *ParserError) {
+	return parseGenericPath(PHYSICAL, frame)
 }
 
 func parseArgValue(frame Frame) (string, int, *ParserError) {
@@ -729,6 +748,37 @@ func parseTemplate(frame Frame) (node, *ParserError) {
 	return &loadTemplateNode{filePath}, nil
 }
 
+func parseLen(frame Frame) (node, *ParserError) {
+	varName, _, err := parseWord(frame)
+	if err != nil {
+		return nil, err.extendMessage("parsing variable name")
+	}
+	return &lenNode{varName}, nil
+}
+
+func parseLink(frame Frame) (node, *ParserError) {
+	frames := splitFrameOn("@", frame)
+	if len(frames) < 2 || len(frames) > 3 {
+		return nil, newParserError(frame, "too many fields given (separated by @)")
+	}
+	sourcePath, _, err := parsePhysicalPath(frames[0])
+	if err != nil {
+		return nil, err.extendMessage("parsing source path (physical)")
+	}
+	destPath, _, err := parsePhysicalPath(frames[1])
+	if err != nil {
+		return nil, err.extendMessage("parsing destination path (physical)")
+	}
+	if len(frames) == 3 {
+		slot, err := parseString(frames[2])
+		if err != nil {
+			return nil, err.extendMessage("parsing slot name")
+		}
+		return &linkObjectNode{sourcePath, destPath, slot}, nil
+	}
+	return &linkObjectNode{sourcePath, destPath, nil}, nil
+}
+
 func parseCommand(frame Frame) (node, *ParserError) {
 	cursor := skipWhiteSpaces(frame)
 	commandKeyWord, cursor, err := parseCommandKeyWord(frame.from(cursor))
@@ -778,6 +828,8 @@ func Parse(buffer string) (node, *ParserError) {
 		".var:":      parseVar,
 		".cmds:":     parseLoad,
 		".template:": parseTemplate,
+		"len":        parseLen,
+		"link:":      parseLink,
 	}
 	noArgsCommands = map[string]node{
 		"selection":    &selectNode{},
