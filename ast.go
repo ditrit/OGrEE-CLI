@@ -244,7 +244,7 @@ func (n *lsAttrGenericNode) execute() (interface{}, error) {
 
 type getUNode struct {
 	path node
-	u    node
+	u    int
 }
 
 func (n *getUNode) execute() (interface{}, error) {
@@ -256,11 +256,29 @@ func (n *getUNode) execute() (interface{}, error) {
 	if !ok {
 		return nil, fmt.Errorf("Path should be a string")
 	}
-	u, e1 := n.u.execute()
-	if e1 != nil {
-		return nil, e1
+	cmd.GetByAttr(path, n.u)
+	return nil, nil
+}
+
+type getSlotNode struct {
+	path node
+	slot node
+}
+
+func (n *getSlotNode) execute() (interface{}, error) {
+	val, err := n.path.execute()
+	if err != nil {
+		return nil, err
 	}
-	cmd.GetByAttr(path, u)
+	path, ok := val.(string)
+	if !ok {
+		return nil, fmt.Errorf("Path should be a string")
+	}
+	slot, err := n.slot.execute()
+	if err != nil {
+		return nil, err
+	}
+	cmd.GetByAttr(path, slot)
 	return nil, nil
 }
 

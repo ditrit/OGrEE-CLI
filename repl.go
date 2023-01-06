@@ -23,6 +23,7 @@ import (
 func InterpretLine(str string) bool {
 	root, err := Parse(str)
 	if err != nil {
+		fmt.Println(err.Error())
 		return false
 	}
 	if root != nil {
