@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"unicode"
 )
@@ -13,7 +14,8 @@ const (
 	tokError
 	tokWord
 	tokLeftParen  // '('
-	tokNumber     // number constant
+	tokInt        // integer constant
+	tokFloat      // float constant
 	tokBool       // boolean constant
 	tokString     // quoted string
 	tokRightParen // ')'
@@ -25,7 +27,7 @@ const (
 type token struct {
 	t   tokenType
 	pos int
-	val string
+	val interface{}
 }
 
 const eof = 0
@@ -41,7 +43,13 @@ type lexer struct {
 type stateFn func(*lexer) stateFn
 
 func (l *lexer) emit(t tokenType) stateFn {
-	return l.emitToken(token{t, l.start, l.input[l.start:l.pos]})
+	val := l.input[l.start:l.pos]
+	newToken := token{
+		t:   t,
+		pos: l.start,
+		val: val,
+	}
+	return l.emitToken(newToken)
 }
 
 func (l *lexer) emitToken(t token) stateFn {
@@ -51,7 +59,12 @@ func (l *lexer) emitToken(t token) stateFn {
 }
 
 func (l *lexer) errorf(format string, args ...interface{}) stateFn {
-	l.t = token{tokError, l.start, fmt.Sprintf(format, args...)}
+	val := fmt.Sprintf(format, args...)
+	l.t = token{
+		t:   tokError,
+		pos: l.start,
+		val: val,
+	}
 	l.start = 0
 	l.pos = 0
 	l.input = l.input[:0]
@@ -186,10 +199,27 @@ func lexString(l *lexer) stateFn {
 func lexNumber(l *lexer) stateFn {
 	digits := "0123456789_"
 	l.acceptRun(digits)
+	isFloat := false
 	if l.accept(".") {
+		isFloat = true
 		l.acceptRun(digits)
 	}
-	return l.emit(tokNumber)
+	if isFloat {
+		val, _ := strconv.ParseFloat(l.input[l.start:l.pos])
+		newToken := token{
+			t:   tokFloat,
+			pos: l.start,
+			val: val,
+		}
+		return l.emitToken(newToken)
+	}
+	val, _ := strconv.ParseInt(l.input[l.start:l.pos])
+	newToken := token{
+		t:   tokInt,
+		pos: l.start,
+		val: val,
+	}
+	return l.emitToken(newToken)
 }
 
 func lexAlphaNumeric(l *lexer) stateFn {
@@ -211,7 +241,11 @@ func lexAlphaNumeric(l *lexer) stateFn {
 }
 
 func (l *lexer) nextToken() token {
-	l.t = token{tokEOF, l.pos, "EOF"}
+	l.t = token{
+		t:   tokEOF,
+		pos: l.pos,
+		val: "EOF",
+	}
 	state := lexExpr
 	for {
 		state = state(l)
