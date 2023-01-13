@@ -1194,37 +1194,21 @@ func (n *createCorridorNode) execute() (interface{}, error) {
 }
 
 type uiDelayNode struct {
-	time node
+	time float64
 }
 
 func (n *uiDelayNode) execute() (interface{}, error) {
-	val, err := n.time.execute()
-	if err != nil {
-		return nil, err
-	}
-	time, ok := val.(float64)
-	if !ok {
-		return nil, fmt.Errorf("delay should be a float")
-	}
-	cmd.UIDelay(time)
+	cmd.UIDelay(n.time)
 	return nil, nil
 }
 
 type uiToggleNode struct {
 	feature string
-	enable  node
+	enable  bool
 }
 
 func (n *uiToggleNode) execute() (interface{}, error) {
-	val, err := n.enable.execute()
-	if err != nil {
-		return nil, err
-	}
-	enable, ok := val.(bool)
-	if !ok {
-		return nil, fmt.Errorf("feature %s expects a boolean", n.feature)
-	}
-	cmd.UIToggle(n.feature, enable)
+	cmd.UIToggle(n.feature, n.enable)
 	return nil, nil
 }
 
@@ -1246,45 +1230,27 @@ func (n *uiHighlightNode) execute() (interface{}, error) {
 
 type cameraMoveNode struct {
 	command  string
-	position node
-	rotation node
+	position []float64
+	rotation []float64
 }
 
 func (n *cameraMoveNode) execute() (interface{}, error) {
-	posVal, err := n.position.execute()
-	if err != nil {
-		return nil, err
-	}
-	position, ok := posVal.([]interface{})
-	if !ok || len(position) != 3 {
+	if len(n.position) != 3 {
 		return nil, fmt.Errorf("Position (first argument) is invalid\nPlease provide a vector3")
 	}
-	rotVal, err := n.rotation.execute()
-	if err != nil {
-		return nil, err
-	}
-	rotation, ok := rotVal.([]interface{})
-	if !ok || len(rotation) != 2 {
+	if len(n.rotation) != 2 {
 		return nil, fmt.Errorf("Rotation (second argument) is invalid\nPlease provide a vector2")
 	}
-	cmd.CameraMove(n.command, position, rotation)
+	cmd.CameraMove(n.command, n.position, n.rotation)
 	return nil, nil
 }
 
 type cameraWaitNode struct {
-	time node
+	time float64
 }
 
 func (n *cameraWaitNode) execute() (interface{}, error) {
-	val, err := n.time.execute()
-	if err != nil {
-		return nil, err
-	}
-	time, ok := val.(float64)
-	if !ok {
-		return nil, fmt.Errorf("delay should be a float")
-	}
-	cmd.CameraWait(time)
+	cmd.CameraWait(n.time)
 	return nil, nil
 }
 
