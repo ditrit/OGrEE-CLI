@@ -205,7 +205,7 @@ func lexNumber(l *lexer) stateFn {
 		l.acceptRun(digits)
 	}
 	if isFloat {
-		val, _ := strconv.ParseFloat(l.input[l.start:l.pos])
+		val, _ := strconv.ParseFloat(l.input[l.start:l.pos], 64)
 		newToken := token{
 			t:   tokFloat,
 			pos: l.start,
@@ -213,7 +213,7 @@ func lexNumber(l *lexer) stateFn {
 		}
 		return l.emitToken(newToken)
 	}
-	val, _ := strconv.ParseInt(l.input[l.start:l.pos])
+	val, _ := strconv.Atoi(l.input[l.start:l.pos])
 	newToken := token{
 		t:   tokInt,
 		pos: l.start,
