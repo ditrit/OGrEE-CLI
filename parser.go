@@ -288,12 +288,86 @@ func parseSeparatedPaths(sep string, frame Frame) ([]node, *ParserError) {
 	return paths, nil
 }
 
-func parseInt(frame Frame) (int, *ParserError) {
-	val, err := strconv.Atoi(frame.full())
-	if err != nil {
-		return 0, newParserError(frame, "integer expected")
+func charIsNumber(char byte) bool {
+	return char >= 48 && char <= 57
+}
+
+func parseInt(frame Frame) (int, int, *ParserError) {
+	end := frame.start
+	for end < frame.end && charIsNumber(frame.char(end)) {
+		end++
 	}
-	return val, nil
+	if end == frame.start {
+		return 0, 0, newParserError(frame, "integer expected")
+	}
+	intString := frame.until(end).str()
+	val, err := strconv.Atoi(intString)
+	if err != nil {
+		panic("cannot convert " + intString + " to integer")
+	}
+	return val, end, nil
+}
+
+func parseFloat(frame Frame) (float64, int, *ParserError) {
+	end := frame.start
+	dotseen := false
+	for end < frame.end {
+		if frame.char(end) == '.' {
+			if dotseen {
+				break
+			}
+			dotseen = true
+		} else if !charIsNumber(frame.char(end)) {
+			break
+		}
+		end++
+	}
+	if end == frame.start {
+		return 0, 0, newParserError(frame, "float expected")
+	}
+	floatString := frame.until(end).str()
+	val, err := strconv.ParseFloat(floatString, 64)
+	if err != nil {
+		panic("cannot convert " + floatString + " to float")
+	}
+	return val, end, nil
+}
+
+func parseBool(frame Frame) (bool, int, *ParserError) {
+	if frame.end-frame.start >= 4 && frame.until(frame.start+4).str() == "true" {
+		return true, frame.start + 4, nil
+	}
+	if frame.end-frame.start >= 5 && frame.until(frame.start+4).str() == "false" {
+		return false, frame.start + 5, nil
+	}
+	return false, 0, newParserError(frame, "bool expected")
+}
+
+func parseVec(frame Frame) ([]float64, int, *ParserError) {
+	vectorOpened, cursor := parseExact("[", frame)
+	if !vectorOpened {
+		return nil, 0, newParserError(frame.empty(), "vector expected")
+	}
+	endCursor := findNext("]", frame.from(cursor))
+	if endCursor == frame.end {
+		return nil, 0, newParserError(frame, "[ opened but never closed")
+	}
+	result := []float64{}
+	for {
+		val, cursor, err := parseFloat(frame.new(cursor, endCursor))
+		if err != nil {
+			return nil, 0, err.extend(frame.until(endCursor+1), "parsing vector")
+		}
+		result = append(result, val)
+		if cursor == endCursor {
+			break
+		}
+		if frame.char(cursor) != ',' {
+			return nil, 0, newParserError(frame.from(cursor).empty(), "comma expected")
+		}
+		cursor++
+	}
+	return result, endCursor + 1, nil
 }
 
 func parseString(frame Frame) (node, *ParserError) {
