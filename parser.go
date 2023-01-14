@@ -105,7 +105,7 @@ func newFrame(buffer string) Frame {
 }
 
 func (frame Frame) new(start int, end int) Frame {
-	if start < frame.start || start >= frame.end || end < frame.start || end > frame.end {
+	if start < frame.start || start > frame.end || end < frame.start || end > frame.end {
 		panic("the subframe is not included in the topframe")
 	}
 	return Frame{frame.buf, start, end}
