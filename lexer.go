@@ -12,22 +12,52 @@ type tokenType int
 const (
 	tokEOF tokenType = iota
 	tokError
-	tokWord
-	tokLeftParen  // '('
+	tokWord       // identifier
+	tokDeref      // variable dereferenciation
 	tokInt        // integer constant
 	tokFloat      // float constant
 	tokBool       // boolean constant
 	tokString     // quoted string
+	tokLeftParen  // '('
 	tokRightParen // ')'
-	tokDeref      // variable dereferenciation
 	tokAdd        // '+'
 	tokSub        // '-'
+	tokMul        // '*'
+	tokDiv        // '/'
+	tokMod        // '%'
+	tokOr         // '||'
+	tokAnd        // '&&'
+	tokEq         // '=='
+	tokNeq        // '!='
+	tokLeq        // '<=
+	tokGeq        // '>='
+	tokGtr        // '>'
+	tokLss        // '<'
+	tokNot        // '!'
 )
 
 type token struct {
 	t   tokenType
 	pos int
 	val interface{}
+}
+
+func (t token) precedence() int {
+	switch t.t {
+	case tokOr:
+		return 1
+	case tokAnd:
+		return 2
+	case tokEq, tokNeq, tokLss, tokLeq, tokGtr, tokGeq:
+		return 3
+	case tokAdd, tokSub:
+		return 4
+	case tokMul, tokDiv, tokMod:
+		return 5
+	case tokNot:
+		return 6
+	}
+	return 0
 }
 
 const eof = 0
@@ -37,7 +67,7 @@ type lexer struct {
 	pos   int
 	start int
 	end   int
-	t     token
+	tok   token
 }
 
 type stateFn func(*lexer) stateFn
@@ -53,14 +83,14 @@ func (l *lexer) emit(t tokenType) stateFn {
 }
 
 func (l *lexer) emitToken(t token) stateFn {
-	l.t = t
+	l.tok = t
 	l.start = l.pos
 	return nil
 }
 
 func (l *lexer) errorf(format string, args ...interface{}) stateFn {
 	val := fmt.Sprintf(format, args...)
-	l.t = token{
+	l.tok = token{
 		t:   tokError,
 		pos: l.start,
 		val: val,
@@ -241,7 +271,7 @@ func lexAlphaNumeric(l *lexer) stateFn {
 }
 
 func (l *lexer) nextToken() token {
-	l.t = token{
+	l.tok = token{
 		t:   tokEOF,
 		pos: l.pos,
 		val: "EOF",
@@ -250,7 +280,7 @@ func (l *lexer) nextToken() token {
 	for {
 		state = state(l)
 		if state == nil {
-			return l.t
+			return l.tok
 		}
 	}
 }
