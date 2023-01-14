@@ -1894,7 +1894,7 @@ func UIHighlight(objArg string) error {
 	return nil
 }
 
-func CameraMove(command string, position []interface{}, rotation []interface{}) {
+func CameraMove(command string, position []float64, rotation []float64) {
 	subdata := map[string]interface{}{"command": command}
 	subdata["position"] = map[string]interface{}{"x": position[0], "y": position[1], "z": position[2]}
 	subdata["rotation"] = map[string]interface{}{"x": rotation[0], "y": rotation[1]}
