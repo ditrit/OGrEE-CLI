@@ -916,6 +916,91 @@ func parseTree(frame Frame) (node, *ParserError) {
 	return &treeNode{path, u}, nil
 }
 
+func parseUi(frame Frame) (node, *ParserError) {
+	key, valueFrame, err := parseAssign(frame)
+	if err != nil {
+		return nil, err
+	}
+	if key == "delay" {
+		delay, _, err := parseFloat(valueFrame)
+		if err != nil {
+			return nil, err.extendMessage("parsing ui delay")
+		}
+		return &uiDelayNode{delay}, nil
+	}
+	if key == "debug" || key == "infos" || key == "wireframe" {
+		val, _, err := parseBool(valueFrame)
+		if err != nil {
+			return nil, err.extendMessage("parsing ui toggle " + key)
+		}
+		return &uiToggleNode{key, val}, nil
+	}
+	if key == "highlight" || key == "hl" {
+		path, _, err := parsePath(valueFrame)
+		if err != nil {
+			return nil, err.extendMessage("parsing ui highlight")
+		}
+		return &uiHighlightNode{path}, nil
+	}
+	return nil, newParserError(frame, "unknown ui command")
+}
+
+func parseCamera(frame Frame) (node, *ParserError) {
+	key, valueFrame, err := parseAssign(frame)
+	if err != nil {
+		return nil, err
+	}
+	if key == "move" || key == "translate" {
+		paramFrames := splitFrameOn("@", valueFrame)
+		if len(paramFrames) != 2 {
+			return nil, newParserError(valueFrame, "2 parameters expected (separated with @)")
+		}
+		position, _, err := parseVec(paramFrames[0])
+		if err != nil {
+			return nil, err.extendMessage("parsing position vector")
+		}
+		rotation, _, err := parseVec(paramFrames[1])
+		if err != nil {
+			return nil, err.extendMessage("parsing rotation vector")
+		}
+		return &cameraMoveNode{key, position, rotation}, nil
+	}
+	if key == "wait" {
+		time, _, err := parseFloat(valueFrame)
+		if err != nil {
+			return nil, err.extendMessage("parsing waiting time")
+		}
+		return &cameraWaitNode{time}, nil
+	}
+	return nil, newParserError(frame, "unknown ui command")
+}
+
+func parseFocus(frame Frame) (node, *ParserError) {
+	path, _, err := parsePath(frame)
+	if err != nil {
+		return nil, err.extendMessage("parsing path")
+	}
+	return &focusNode{path}, nil
+}
+
+func parseWhile(frame Frame) (node, *ParserError) {
+	if frame.char(frame.start) != '(' {
+		return nil, newParserError(frame.empty(), "( expected")
+	}
+	condition, cursor, err := parseExpr(frame.from(frame.start + 1))
+	if condition != nil {
+		return nil, err.extendMessage("parsing condition")
+	}
+	if frame.char(cursor) != ')' {
+		return nil, newParserError(frame.empty(), ") expected")
+	}
+	body, err := parseCommand(frame.from(cursor + 1))
+	if err != nil {
+		return nil, err.extendMessage("parsing while body")
+	}
+	return &whileNode{condition, body}, nil
+}
+
 func parseCommand(frame Frame) (node, *ParserError) {
 	cursor := skipWhiteSpaces(frame)
 	commandKeyWord, cursor, err := parseCommandKeyWord(frame.from(cursor))
