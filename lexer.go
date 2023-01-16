@@ -20,6 +20,7 @@ const (
 	tokString     // quoted string
 	tokLeftParen  // '('
 	tokRightParen // ')'
+	tokNot        // '!'
 	tokAdd        // '+'
 	tokSub        // '-'
 	tokMul        // '*'
@@ -33,13 +34,14 @@ const (
 	tokGeq        // '>='
 	tokGtr        // '>'
 	tokLss        // '<'
-	tokNot        // '!'
 )
 
 type token struct {
-	t   tokenType
-	pos int
-	val interface{}
+	t     tokenType
+	start int
+	end   int
+	str   string
+	val   interface{}
 }
 
 func (t token) precedence() int {
@@ -60,6 +62,10 @@ func (t token) precedence() int {
 	return 0
 }
 
+func (t token) isBinaryOperator() bool {
+	return t.t >= tokAdd
+}
+
 const eof = 0
 
 type lexer struct {
@@ -68,22 +74,19 @@ type lexer struct {
 	start int
 	end   int
 	tok   token
+	atEOF bool
 }
 
 type stateFn func(*lexer) stateFn
 
-func (l *lexer) emit(t tokenType) stateFn {
-	val := l.input[l.start:l.pos]
-	newToken := token{
-		t:   t,
-		pos: l.start,
-		val: val,
+func (l *lexer) emit(t tokenType, val interface{}) stateFn {
+	l.tok = token{
+		t:     t,
+		start: l.start,
+		end:   l.pos,
+		str:   l.input[l.start:l.pos],
+		val:   val,
 	}
-	return l.emitToken(newToken)
-}
-
-func (l *lexer) emitToken(t token) stateFn {
-	l.tok = t
 	l.start = l.pos
 	return nil
 }
@@ -91,9 +94,10 @@ func (l *lexer) emitToken(t token) stateFn {
 func (l *lexer) errorf(format string, args ...interface{}) stateFn {
 	val := fmt.Sprintf(format, args...)
 	l.tok = token{
-		t:   tokError,
-		pos: l.start,
-		val: val,
+		t:     tokError,
+		start: l.start,
+		str:   val,
+		val:   val,
 	}
 	l.start = 0
 	l.pos = 0
@@ -103,6 +107,7 @@ func (l *lexer) errorf(format string, args ...interface{}) stateFn {
 
 func (l *lexer) next() byte {
 	if l.pos >= l.end {
+		l.atEOF = true
 		return eof
 	}
 	char := l.input[l.pos]
@@ -115,7 +120,9 @@ func (l *lexer) ignore() {
 }
 
 func (l *lexer) backup() {
-	l.start = l.pos
+	if l.pos > 0 && !l.atEOF {
+		l.pos--
+	}
 }
 
 func (l *lexer) peek() byte {
@@ -125,7 +132,7 @@ func (l *lexer) peek() byte {
 }
 
 func (l *lexer) accept(valid string) bool {
-	if strings.Index(valid, string(l.next())) >= 0 {
+	if strings.Contains(valid, string(l.next())) {
 		return true
 	}
 	l.backup()
@@ -133,7 +140,7 @@ func (l *lexer) accept(valid string) bool {
 }
 
 func (l *lexer) acceptRun(valid string) {
-	for strings.Index(valid, string(l.next())) >= 0 {
+	for strings.Contains(valid, string(l.next())) {
 	}
 	l.backup()
 }
@@ -164,33 +171,75 @@ func isAlphaNumeric(c byte) bool {
 }
 
 func lexExpr(l *lexer) stateFn {
-	for {
-		c := l.next()
-		switch c {
-		case eof:
-			return nil
-		case ' ', '\t':
-			l.ignore()
-		case '$':
-			return lexDeref
-		case '"':
-			return lexString
-		case '(':
-			return l.emit(tokLeftParen)
-		case ')':
-			return l.emit(tokRightParen)
-		case '+':
-			return l.emit(tokAdd)
-		case '-':
-			return l.emit(tokSub)
+	c := l.next()
+	switch c {
+	case eof:
+		return nil
+	case ' ', '\t':
+		l.ignore()
+		return lexExpr
+	case '$':
+		return lexDeref
+	case '"':
+		return lexString
+	case '(':
+		return l.emit(tokLeftParen, nil)
+	case ')':
+		return l.emit(tokRightParen, nil)
+	case '+':
+		return l.emit(tokAdd, nil)
+	case '-':
+		return l.emit(tokSub, nil)
+	case '*':
+		return l.emit(tokMul, nil)
+	case '/':
+		return l.emit(tokDiv, nil)
+	case '%':
+		return l.emit(tokMod, nil)
+	case '|':
+		if l.next() == '|' {
+			return l.emit(tokOr, nil)
 		}
-		if isDigit(c) || c == '.' {
-			return lexNumber
+	case '&':
+		if l.next() == '&' {
+			return l.emit(tokAnd, nil)
 		}
-		if isLetter(c) {
-			return lexAlphaNumeric
+	case '=':
+		if l.next() == '=' {
+			return l.emit(tokEq, nil)
+		}
+	case '!':
+		c = l.next()
+		if c == '=' {
+			return l.emit(tokNeq, nil)
+		}
+		if c == eof {
+			return l.emit(tokNot, nil)
+		}
+	case '<':
+		c = l.next()
+		if c == '=' {
+			return l.emit(tokLeq, nil)
+		}
+		if c == eof {
+			return l.emit(tokLss, nil)
+		}
+	case '>':
+		c = l.next()
+		if c == '=' {
+			return l.emit(tokGeq, nil)
+		}
+		if c == eof {
+			return l.emit(tokGtr, nil)
 		}
 	}
+	if isDigit(c) || c == '.' {
+		return lexNumber
+	}
+	if isLetter(c) {
+		return lexAlphaNumeric
+	}
+	panic("#" + string(c) + "#")
 }
 
 func lexDeref(l *lexer) stateFn {
@@ -212,7 +261,7 @@ func lexDeref(l *lexer) stateFn {
 	if l.next() != '}' {
 		return l.errorf("} expected")
 	}
-	return l.emitToken(token{t: tokDeref, pos: l.start, val: l.input[l.start+2 : l.pos-1]})
+	return l.emit(tokDeref, l.input[l.start+2:l.pos-1])
 }
 
 func lexString(l *lexer) stateFn {
@@ -221,7 +270,7 @@ func lexString(l *lexer) stateFn {
 		case eof:
 			return l.errorf("unterminated string")
 		case '"':
-			return l.emitToken(token{t: tokString, pos: l.start, val: l.input[l.start+1 : l.pos-1]})
+			return l.emit(tokString, l.input[l.start+1:l.pos-1])
 		}
 	}
 }
@@ -236,20 +285,10 @@ func lexNumber(l *lexer) stateFn {
 	}
 	if isFloat {
 		val, _ := strconv.ParseFloat(l.input[l.start:l.pos], 64)
-		newToken := token{
-			t:   tokFloat,
-			pos: l.start,
-			val: val,
-		}
-		return l.emitToken(newToken)
+		return l.emit(tokFloat, val)
 	}
 	val, _ := strconv.Atoi(l.input[l.start:l.pos])
-	newToken := token{
-		t:   tokInt,
-		pos: l.start,
-		val: val,
-	}
-	return l.emitToken(newToken)
+	return l.emit(tokInt, val)
 }
 
 func lexAlphaNumeric(l *lexer) stateFn {
@@ -264,16 +303,16 @@ func lexAlphaNumeric(l *lexer) stateFn {
 		}
 		word := l.input[l.start:l.pos]
 		if word == "true" || word == "false" {
-			return l.emit(tokBool)
+			return l.emit(tokBool, nil)
 		}
-		return l.emit(tokWord)
+		return l.emit(tokWord, nil)
 	}
 }
 
 func (l *lexer) nextToken() token {
 	l.tok = token{
 		t:   tokEOF,
-		pos: l.pos,
+		str: "EOF",
 		val: "EOF",
 	}
 	state := lexExpr
