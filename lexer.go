@@ -80,11 +80,15 @@ type lexer struct {
 type stateFn func(*lexer) stateFn
 
 func (l *lexer) emit(t tokenType, val interface{}) stateFn {
+	str := l.input[l.start:l.pos]
+	if t == tokEOF {
+		str = "eof"
+	}
 	l.tok = token{
 		t:     t,
 		start: l.start,
 		end:   l.pos,
-		str:   l.input[l.start:l.pos],
+		str:   str,
 		val:   val,
 	}
 	l.start = l.pos
@@ -174,7 +178,7 @@ func lexExpr(l *lexer) stateFn {
 	c := l.next()
 	switch c {
 	case eof:
-		return nil
+		return l.emit(tokEOF, nil)
 	case ' ', '\t':
 		l.ignore()
 		return lexExpr
@@ -310,11 +314,6 @@ func lexAlphaNumeric(l *lexer) stateFn {
 }
 
 func (l *lexer) nextToken() token {
-	l.tok = token{
-		t:   tokEOF,
-		str: "EOF",
-		val: "EOF",
-	}
 	state := lexExpr
 	for {
 		state = state(l)

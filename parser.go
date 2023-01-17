@@ -71,7 +71,7 @@ func buildColoredFrame(frame Frame) string {
 }
 
 func (err *ParserError) Error() string {
-	errorString := ""
+	errorString := "\n"
 	for i := len(err.messages) - 1; i >= 0; i-- {
 		frame := err.frames[i]
 		errorString += buildColoredFrame(frame) + "\n"
@@ -148,17 +148,6 @@ func findNext(substring string, frame Frame) int {
 		return frame.start + idx
 	}
 	return frame.end
-}
-
-func findNextAmong(substringList []string, frame Frame) int {
-	minIdx := frame.end
-	for _, s := range substringList {
-		idx := strings.Index(frame.str(), s)
-		if idx < minIdx {
-			minIdx = idx
-		}
-	}
-	return minIdx
 }
 
 func findClosing(frame Frame) int {
@@ -407,86 +396,112 @@ func parsePhysicalPath(frame Frame) (node, int, *ParserError) {
 	return parseGenericPath(PHYSICAL, frame)
 }
 
-func parseDeref(frame Frame) (node, int, *ParserError) {
-	ok, cursor := parseExact("${", frame)
-	if !ok {
-		return nil, 0, newParserError(frame.empty(), "$ expected")
+func exprError(l *lexer, message string) *ParserError {
+	frame := Frame{
+		buf:   l.input,
+		start: l.tok.start,
+		end:   l.tok.end,
 	}
-	cursor = skipWhiteSpaces(frame.from(cursor))
-	varName, cursor, err := parseWord(frame.from(cursor))
-	if err != nil {
-		return nil, 0, err.extendMessage("parsing variable name")
-	}
-	cursor = skipWhiteSpaces(frame.from(cursor))
-	ok, cursor = parseExact("}", frame)
-	if !ok {
-		return nil, 0, newParserError(frame.empty(), "} expected")
-	}
-	return &symbolReferenceNode{varName}, cursor, nil
+	return newParserError(frame, message)
 }
 
-func parsePrimaryExpr(l *lexer) node {
-	tok := l.nextToken()
+func parsePrimaryExpr(l *lexer) (node, *ParserError) {
+	tok := l.tok
+	l.nextToken()
 	switch tok.t {
 	case tokBool:
-		return &boolLeaf{tok.val.(bool)}
+		return &boolLeaf{tok.val.(bool)}, nil
 	case tokInt:
-		return &intLeaf{tok.val.(int)}
+		return &intLeaf{tok.val.(int)}, nil
 	case tokFloat:
-		return &floatLeaf{tok.val.(float64)}
+		return &floatLeaf{tok.val.(float64)}, nil
 	case tokDeref:
-		return &symbolReferenceNode{tok.val.(string)}
+		return &symbolReferenceNode{tok.val.(string)}, nil
+	case tokLeftParen:
+		expr, err := parseExprFromLex(l)
+		if err != nil {
+			return nil, err
+		}
+		endTok := l.tok
+		if endTok.t != tokRightParen {
+			return nil, exprError(l, ") expected, got "+endTok.str)
+		}
+		l.nextToken()
+		return expr, nil
 	}
-	return nil
+	return nil, exprError(l, "unexpected token : "+tok.str)
 }
 
-func parseUnaryExpr(l *lexer) node {
-	tok := l.nextToken()
-	switch tok.t {
+func parseUnaryExpr(l *lexer) (node, *ParserError) {
+	switch l.tok.t {
 	case tokAdd:
+		l.nextToken()
 		return parseUnaryExpr(l)
 	case tokSub:
-		x := parseUnaryExpr(l)
-		return &negateNode{x}
+		l.nextToken()
+		x, err := parseUnaryExpr(l)
+		if err != nil {
+			return nil, err
+		}
+		return &negateNode{x}, nil
 	case tokNot:
-		x := parseUnaryExpr(l)
-		return &negateBoolNode{x}
+		l.nextToken()
+		x, err := parseUnaryExpr(l)
+		if err != nil {
+			return nil, err
+		}
+		return &negateBoolNode{x}, nil
 	}
 	return parsePrimaryExpr(l)
 }
 
-func parseBinaryExpr(l *lexer, leftOperand node, precedence int) node {
+func parseBinaryExpr(l *lexer, leftOperand node, precedence int) (node, *ParserError) {
+	var err *ParserError
 	if leftOperand == nil {
-		leftOperand = parseUnaryExpr(l)
+		leftOperand, err = parseUnaryExpr(l)
+		if err != nil {
+			return nil, err
+		}
 	}
 	for {
-		operator := l.nextToken()
+		operator := l.tok
 		operatorPrecedence := operator.precedence()
 		if operatorPrecedence < precedence {
-			return leftOperand
+			return leftOperand, nil
 		}
-		rightOperand := parseBinaryExpr(l, nil, operatorPrecedence+1)
+		l.nextToken()
+		rightOperand, err := parseBinaryExpr(l, nil, operatorPrecedence+1)
+		if err != nil {
+			return nil, err
+		}
 		switch operator.t {
 		case tokAdd, tokSub, tokMul, tokDiv, tokMod:
-			leftOperand = &arithNode{operator.val.(string), leftOperand, rightOperand}
+			leftOperand = &arithNode{operator.str, leftOperand, rightOperand}
 		case tokOr, tokAnd:
-			leftOperand = &logicalNode{operator.val.(string), leftOperand, rightOperand}
+			leftOperand = &logicalNode{operator.str, leftOperand, rightOperand}
 		case tokEq, tokNeq:
-			leftOperand = &equalityNode{operator.val.(string), leftOperand, rightOperand}
+			leftOperand = &equalityNode{operator.str, leftOperand, rightOperand}
 		case tokLeq, tokGeq, tokGtr, tokLss:
-			leftOperand = &comparatorNode{operator.val.(string), leftOperand, rightOperand}
+			leftOperand = &comparatorNode{operator.str, leftOperand, rightOperand}
 		}
 	}
 }
 
+func parseExprFromLex(l *lexer) (node, *ParserError) {
+	return parseBinaryExpr(l, nil, 1)
+}
+
 func parseExpr(frame Frame) (node, int, *ParserError) {
 	l := lex(frame.str(), frame.start, frame.end)
-	expr := parseBinaryExpr(l, nil, 1)
-	lastTok := l.nextToken()
-	if expr == nil {
-		return nil, lastTok.pos, newParserError(frame, "expression expected")
+	l.nextToken()
+	expr, err := parseExprFromLex(l)
+	if err != nil {
+		return nil, l.tok.end, err
 	}
-	return expr, lastTok.pos, nil
+	if expr == nil {
+		return nil, l.tok.end, newParserError(frame, "expression expected")
+	}
+	return expr, l.tok.end, nil
 }
 
 func parseAssign(frame Frame) (string, Frame, *ParserError) {
@@ -642,7 +657,6 @@ func parseLsObj(lsIdx int, frame Frame) (node, *ParserError) {
 			}
 		}
 	}
-	println(path, lsIdx, recursive, sort, attrList, format)
 	return &lsObjNode{path, lsIdx, recursive, sort, attrList, format}, nil
 }
 

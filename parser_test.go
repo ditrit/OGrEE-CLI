@@ -21,3 +21,43 @@ func TestParseArgs(t *testing.T) {
 		t.Errorf("wrong args returned : %v", args)
 	}
 }
+
+func TestParseExpr(t *testing.T) {
+	frame := newFrame("42 + (3 - 4) * 6")
+	expr, _, err := parseExpr(frame)
+	if err != nil {
+		t.Errorf(err.Error())
+	}
+	expectedExpr := &arithNode{
+		op:   "+",
+		left: &intLeaf{42},
+		right: &arithNode{
+			op: "*",
+			left: &arithNode{
+				op:    "-",
+				left:  &intLeaf{3},
+				right: &intLeaf{4},
+			},
+			right: &intLeaf{6},
+		},
+	}
+	if !reflect.DeepEqual(expr, expectedExpr) {
+		t.Errorf("unexpected expression")
+	}
+}
+
+func TestParseExpr2(t *testing.T) {
+	frame := newFrame("3 - 4) * 6")
+	expr, _, err := parseExpr(frame)
+	if err != nil {
+		t.Errorf(err.Error())
+	}
+	expectedExpr := &arithNode{
+		op:    "-",
+		left:  &intLeaf{3},
+		right: &intLeaf{4},
+	}
+	if !reflect.DeepEqual(expr, expectedExpr) {
+		t.Errorf("unexpected expression")
+	}
+}
