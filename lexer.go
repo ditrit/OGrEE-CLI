@@ -36,6 +36,12 @@ const (
 	tokLss        // '<'
 )
 
+func (s tokenType) String() string {
+	return [...]string{
+		"eof", "word", "deref", "int", "float", "bool", "string", "leftParen", "rightParen", "not",
+		"add", "sub", "mul", "div", "mod", "or", "and", "eq", "neq", "leq", "geq", "gtr", "lss"}[s]
+}
+
 type token struct {
 	t     tokenType
 	start int
@@ -60,10 +66,6 @@ func (t token) precedence() int {
 		return 6
 	}
 	return 0
-}
-
-func (t token) isBinaryOperator() bool {
-	return t.t >= tokAdd
 }
 
 const eof = 0
@@ -129,12 +131,6 @@ func (l *lexer) backup() {
 	}
 }
 
-func (l *lexer) peek() byte {
-	char := l.next()
-	l.backup()
-	return char
-}
-
 func (l *lexer) accept(valid string) bool {
 	if strings.Contains(valid, string(l.next())) {
 		return true
@@ -147,15 +143,6 @@ func (l *lexer) acceptRun(valid string) {
 	for strings.Contains(valid, string(l.next())) {
 	}
 	l.backup()
-}
-
-func (l *lexer) atTerminator() bool {
-	r := l.peek()
-	switch r {
-	case eof, ' ', '\t', ')', '}':
-		return true
-	}
-	return false
 }
 
 func isSpace(c byte) bool {
@@ -237,13 +224,21 @@ func lexExpr(l *lexer) stateFn {
 			return l.emit(tokGtr, nil)
 		}
 	}
-	if isDigit(c) || c == '.' {
+	if isDigit(c) {
 		return lexNumber
 	}
+	if c == '.' {
+		if l.accept(".") {
+			return l.emit(tokEOF, nil)
+		}
+		l.backup()
+		return lexNumber
+	}
+
 	if isLetter(c) {
 		return lexAlphaNumeric
 	}
-	panic("#" + string(c) + "#")
+	return l.emit(tokEOF, nil)
 }
 
 func lexDeref(l *lexer) stateFn {
@@ -284,6 +279,12 @@ func lexNumber(l *lexer) stateFn {
 	l.acceptRun(digits)
 	isFloat := false
 	if l.accept(".") {
+		if l.accept(".") {
+			l.backup()
+			l.backup()
+			val, _ := strconv.Atoi(l.input[l.start:l.pos])
+			return l.emit(tokInt, val)
+		}
 		isFloat = true
 		l.acceptRun(digits)
 	}
@@ -302,9 +303,6 @@ func lexAlphaNumeric(l *lexer) stateFn {
 			continue
 		}
 		l.backup()
-		if !l.atTerminator() {
-			return l.errorf("bad character %c", c)
-		}
 		word := l.input[l.start:l.pos]
 		if word == "true" || word == "false" {
 			return l.emit(tokBool, nil)
