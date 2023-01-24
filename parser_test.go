@@ -7,6 +7,14 @@ import (
 	"github.com/davecgh/go-spew/spew"
 )
 
+func TestFindClosing(t *testing.T) {
+	frame := newFrame("(a(a)(a()\")\"a))aa")
+	i := findClosing(frame)
+	if i != 14 {
+		t.Errorf("cannot find the closing parenthesis")
+	}
+}
+
 func TestParseArgs(t *testing.T) {
 	frame := newFrame("-a 42 -v coucou.plouf -f -s dazd")
 	args, middle, err := parseArgs([]string{"a", "s"}, []string{"v", "f"}, frame)
