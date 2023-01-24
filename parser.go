@@ -317,33 +317,6 @@ func parseBool(frame Frame) (bool, int, *ParserError) {
 	return false, 0, newParserError(frame, "bool expected")
 }
 
-func parseVec(frame Frame) ([]float64, int, *ParserError) {
-	vectorOpened, frame := parseExact("[", frame)
-	if !vectorOpened {
-		return nil, 0, newParserError(frame.empty(), "vector expected")
-	}
-	endCursor := findNext("]", frame)
-	if endCursor == frame.end {
-		return nil, 0, newParserError(frame, "[ opened but never closed")
-	}
-	result := []float64{}
-	for {
-		val, cursor, err := parseFloat(frame.until(endCursor))
-		if err != nil {
-			return nil, 0, err.extend(frame.until(endCursor+1), "parsing vector")
-		}
-		result = append(result, val)
-		if cursor == endCursor {
-			break
-		}
-		if frame.char(cursor) != ',' {
-			return nil, 0, newParserError(frame.from(cursor).empty(), "comma expected")
-		}
-		cursor++
-	}
-	return result, endCursor + 1, nil
-}
-
 func parseString(topFrame Frame) (node, *ParserError) {
 	var varName string
 	var err *ParserError
@@ -447,6 +420,28 @@ func parsePrimaryExpr(l *lexer) (node, *ParserError) {
 		}
 		l.nextToken(lexExpr)
 		return expr, nil
+	case tokLeftBrac:
+		exprList := []node{}
+		if l.tok.t == tokRightBrac {
+			l.nextToken(lexExpr)
+			return &arrNode{exprList}, nil
+		}
+		for {
+			expr, err := parseExprFromLex(l)
+			if err != nil {
+				return nil, err
+			}
+			exprList = append(exprList, expr)
+			if l.tok.t == tokRightBrac {
+				l.nextToken(lexExpr)
+				return &arrNode{exprList}, nil
+			}
+			if l.tok.t == tokComma {
+				l.nextToken(lexExpr)
+				continue
+			}
+			return nil, exprError(l, "] or comma expected")
+		}
 	}
 	return nil, exprError(l, "unexpected token : "+tok.str)
 }
@@ -1020,11 +1015,11 @@ func parseCamera(frame Frame) (node, *ParserError) {
 		if len(paramFrames) != 2 {
 			return nil, newParserError(valueFrame, "2 parameters expected (separated with @)")
 		}
-		position, _, err := parseVec(paramFrames[0])
+		position, _, err := parseExpr(paramFrames[0])
 		if err != nil {
 			return nil, err.extendMessage("parsing position vector")
 		}
-		rotation, _, err := parseVec(paramFrames[1])
+		rotation, _, err := parseExpr(paramFrames[1])
 		if err != nil {
 			return nil, err.extendMessage("parsing rotation vector")
 		}

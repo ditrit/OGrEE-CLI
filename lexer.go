@@ -18,6 +18,9 @@ const (
 	tokFloat      // float constant
 	tokBool       // boolean constant
 	tokString     // quoted string
+	tokLeftBrac   // '['
+	tokRightBrac  // ']'
+	tokComma      // ','
 	tokLeftParen  // '('
 	tokRightParen // ')'
 	tokNot        // '!'
@@ -173,6 +176,10 @@ func lexExpr(l *lexer) stateFn {
 		return lexDeref
 	case '"':
 		return lexString
+	case '[':
+		return l.emit(tokLeftBrac, nil)
+	case ']':
+		return l.emit(tokRightBrac, nil)
 	case '(':
 		return l.emit(tokLeftParen, nil)
 	case ')':
