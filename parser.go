@@ -182,11 +182,19 @@ func findClosing(frame Frame) int {
 		panic("invalid opening character")
 	}
 	stackCount := 0
+	inString := false
 	for cursor := frame.start; cursor < frame.end; cursor++ {
-		if frame.char(cursor) == open {
-			stackCount++
+		if inString {
+			if frame.char(cursor) == '"' {
+				inString = false
+			}
+			continue
 		}
-		if frame.char(cursor) == close {
+		if frame.char(cursor) == '"' {
+			inString = true
+		} else if frame.char(cursor) == open {
+			stackCount++
+		} else if frame.char(cursor) == close {
 			stackCount--
 		}
 		if stackCount == 0 {
