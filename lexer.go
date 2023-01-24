@@ -34,12 +34,14 @@ const (
 	tokGeq        // '>='
 	tokGtr        // '>'
 	tokLss        // '<'
+	tokOrientation
 )
 
 func (s tokenType) String() string {
 	return [...]string{
-		"eof", "word", "deref", "int", "float", "bool", "string", "leftParen", "rightParen", "not",
-		"add", "sub", "mul", "div", "mod", "or", "and", "eq", "neq", "leq", "geq", "gtr", "lss"}[s]
+		"eof", "word", "deref", "int", "float", "bool", "string",
+		"leftParen", "rightParen", "not", "add", "sub", "mul", "div",
+		"mod", "or", "and", "eq", "neq", "leq", "geq", "gtr", "lss", "orientation"}[s]
 }
 
 type token struct {
@@ -164,8 +166,6 @@ func isAlphaNumeric(c byte) bool {
 func lexExpr(l *lexer) stateFn {
 	c := l.next()
 	switch c {
-	case eof:
-		return l.emit(tokEOF, nil)
 	case ' ', '\t':
 		l.ignore()
 		return lexExpr
@@ -311,8 +311,33 @@ func lexAlphaNumeric(l *lexer) stateFn {
 	}
 }
 
-func (l *lexer) nextToken() token {
-	state := lexExpr
+func lexOrientation(l *lexer) stateFn {
+	if l.accept("+-") {
+		if l.accept("EW") {
+			l.accept("+-")
+			l.accept("NW")
+		} else if l.accept("NW") {
+			l.accept("+-")
+			l.accept("EW")
+		} else {
+			return l.errorf("invalid orientation")
+		}
+	} else if l.accept("EW") {
+		l.accept("NW")
+	} else if l.accept("NW") {
+		l.accept("EW")
+	} else {
+		return l.errorf("invalid orientation")
+	}
+	return l.emit(tokOrientation, nil)
+}
+
+func (l *lexer) nextToken(state stateFn) token {
+	if l.next() == eof {
+		state = l.emit(tokEOF, nil)
+	} else {
+		l.backup()
+	}
 	for {
 		state = state(l)
 		if state == nil {
