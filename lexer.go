@@ -339,10 +339,10 @@ func (l *lexer) nextToken(state stateFn) token {
 		l.backup()
 	}
 	for {
-		state = state(l)
 		if state == nil {
 			return l.tok
 		}
+		state = state(l)
 	}
 }
 

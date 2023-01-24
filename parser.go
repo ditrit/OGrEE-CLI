@@ -558,9 +558,7 @@ func parseSingleArg(allowedArgs []string, allowedFlags []string, frame Frame) (
 	string, string, Frame, *ParserError,
 ) {
 	frame = skipWhiteSpaces(frame.forward(1))
-	wordEnd := findNext(" ", frame)
-	println("wordend : ", wordEnd)
-	arg, frame, err := parseWord(frame.until(wordEnd))
+	arg, frame, err := parseWord(frame)
 	if err != nil {
 		return "", "", Frame{}, err.extendMessage("parsing arg name").
 			extend(frame, "parsing argument")

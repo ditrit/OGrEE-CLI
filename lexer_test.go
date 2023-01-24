@@ -7,7 +7,7 @@ import (
 func checkTokSequence(expected []tokenType, str string, t *testing.T) {
 	l := lex(str, 0, len(str))
 	for i := 0; i < len(expected); i++ {
-		tok := l.nextToken()
+		tok := l.nextToken(lexExpr)
 		if tok.t != expected[i] {
 			t.Errorf("Unexpected token : %s instead of %s", tok.t.String(), expected[i].String())
 		}

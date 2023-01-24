@@ -3,19 +3,21 @@ package main
 import (
 	"reflect"
 	"testing"
+
+	"github.com/davecgh/go-spew/spew"
 )
 
 func TestParseArgs(t *testing.T) {
 	frame := newFrame("-a 42 -v coucou.plouf -f -s dazd")
-	args, endLeft, startRight, err := parseArgs([]string{"a", "s"}, []string{"v", "f"}, frame)
+	args, middle, err := parseArgs([]string{"a", "s"}, []string{"v", "f"}, frame)
 	if err != nil {
 		t.Errorf(err.Error())
 	}
-	if endLeft != 9 {
-		t.Errorf("wrong end position for left arguments : %d", endLeft)
+	if middle.start != 9 {
+		t.Errorf("wrong end position for left arguments : %d", middle.start)
 	}
-	if startRight != 22 {
-		t.Errorf("wrong start position for right arguments : %d", startRight)
+	if middle.end != 22 {
+		t.Errorf("wrong start position for right arguments : %d", middle.end)
 	}
 	if !reflect.DeepEqual(args, map[string]string{"a": "42", "s": "dazd", "v": "", "f": ""}) {
 		t.Errorf("wrong args returned : %v", args)
@@ -23,41 +25,37 @@ func TestParseArgs(t *testing.T) {
 }
 
 func TestParseExpr(t *testing.T) {
-	frame := newFrame("42 + (3 - 4) * 6")
-	expr, _, err := parseExpr(frame)
+	frame := newFrame("\"plouf\" + (3 - 4.2) * ${a}  42")
+	expr, cursor, err := parseExpr(frame)
 	if err != nil {
 		t.Errorf(err.Error())
 	}
 	expectedExpr := &arithNode{
 		op:   "+",
-		left: &intLeaf{42},
+		left: &strLeaf{"plouf"},
 		right: &arithNode{
 			op: "*",
 			left: &arithNode{
 				op:    "-",
 				left:  &intLeaf{3},
-				right: &intLeaf{4},
+				right: &floatLeaf{4.2},
 			},
-			right: &intLeaf{6},
+			right: &symbolReferenceNode{"a"},
 		},
 	}
 	if !reflect.DeepEqual(expr, expectedExpr) {
-		t.Errorf("unexpected expression")
+		t.Errorf("unexpected expression : \n%s", spew.Sdump(expr))
+	}
+	if cursor.start != 28 {
+		t.Errorf("unexpected cursor : %d", cursor.start)
 	}
 }
 
 func TestParseExpr2(t *testing.T) {
-	frame := newFrame("3 - 4) * 6")
-	expr, _, err := parseExpr(frame)
-	if err != nil {
-		t.Errorf(err.Error())
-	}
-	expectedExpr := &arithNode{
-		op:    "-",
-		left:  &intLeaf{3},
-		right: &intLeaf{4},
-	}
-	if !reflect.DeepEqual(expr, expectedExpr) {
-		t.Errorf("unexpected expression")
+	frame := newFrame("42..48")
+	expr, _, _ := parseExpr(frame)
+	expected := &intLeaf{42}
+	if !reflect.DeepEqual(expr, expected) {
+		t.Errorf("unexpected expression : \n%s", spew.Sdump(expr))
 	}
 }
