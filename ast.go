@@ -1407,18 +1407,28 @@ func (n *uiHighlightNode) execute() (interface{}, error) {
 
 type cameraMoveNode struct {
 	command  string
-	position []float64
-	rotation []float64
+	position node
+	rotation node
 }
 
 func (n *cameraMoveNode) execute() (interface{}, error) {
-	if len(n.position) != 3 {
-		return nil, fmt.Errorf("Position (first argument) is invalid\nPlease provide a vector3")
+	posVal, err := n.position.execute()
+	if err != nil {
+		return nil, err
 	}
-	if len(n.rotation) != 2 {
-		return nil, fmt.Errorf("Rotation (second argument) is invalid\nPlease provide a vector2")
+	position, ok := posVal.([]float64)
+	if !ok || len(position) != 3 {
+		return nil, fmt.Errorf("position (first argument) is invalid\nPlease provide a vector3")
 	}
-	cmd.CameraMove(n.command, n.position, n.rotation)
+	rotVal, err := n.rotation.execute()
+	if err != nil {
+		return nil, err
+	}
+	rotation, ok := rotVal.([]float64)
+	if !ok || len(rotation) != 2 {
+		return nil, fmt.Errorf("rotation (second argument) is invalid\nPlease provide a vector2")
+	}
+	cmd.CameraMove(n.command, position, rotation)
 	return nil, nil
 }
 
