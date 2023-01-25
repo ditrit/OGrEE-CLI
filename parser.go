@@ -27,7 +27,6 @@ var manCommands = []string{
 	"print", "unset", "selection",
 }
 
-var wordRegex = `([A-Za-z_][A-Za-z0-9_]*)`
 var valueRegex = `((\S*)|(".*")|(\(.*\)))`
 
 func sliceContains(slice []string, s string) bool {
@@ -66,6 +65,7 @@ func buildColoredFrame(frame Frame) string {
 	result := ""
 	result += frame.buf[0:frame.start]
 	result += "\033[31m"
+	result += "|"
 	result += frame.buf[frame.start:frame.end]
 	result += "\033[0m"
 	result += frame.buf[frame.end:]
@@ -145,6 +145,10 @@ func (frame Frame) forward(offset int) Frame {
 
 func (frame Frame) first() byte {
 	return frame.char(frame.start)
+}
+
+func lexerFromFrame(frame Frame) *lexer {
+	return newLexer(frame.buf, frame.start, frame.end)
 }
 
 func skipWhiteSpaces(frame Frame) Frame {
@@ -234,14 +238,12 @@ func parseKeyWord(frame Frame, prefixChecker func(string) bool) (string, Frame, 
 }
 
 func parseWord(frame Frame) (string, Frame, *ParserError) {
-	cursor := frame.end
-	for cursor > frame.start && !regexMatch(wordRegex, frame.until(cursor).str()) {
-		cursor--
+	l := lexerFromFrame(frame)
+	tok := l.nextToken(lexExpr)
+	if tok.t != tokWord {
+		return "", Frame{}, newParserError(frame.empty(), "word expected")
 	}
-	if cursor == frame.start {
-		return "", Frame{}, newParserError(frame, "invalid word")
-	}
-	return frame.until(cursor).str(), frame.from(cursor), nil
+	return tok.str, frame.from(tok.end), nil
 }
 
 func parseSeparatedWords(sep string, frame Frame) ([]string, *ParserError) {
@@ -325,11 +327,11 @@ func parseBool(frame Frame) (bool, int, *ParserError) {
 	return false, 0, newParserError(frame, "bool expected")
 }
 
-func parseString(topFrame Frame) (node, *ParserError) {
+func parseString(frame Frame) (node, *ParserError) {
 	var varName string
 	var err *ParserError
 	nodesToConcat := []node{}
-	frame := topFrame
+	topFrame := frame
 	for frame.start < frame.end {
 		varIndex := findNext("&{", frame)
 		if varIndex == frame.end {
@@ -342,7 +344,7 @@ func parseString(topFrame Frame) (node, *ParserError) {
 		endVarIndex := findNext("}", frame.from(varIndex))
 		if endVarIndex == frame.end {
 			return nil, newParserError(frame.from(varIndex), "&{ opened but never closed").
-				extend(frame, "parsing string")
+				extend(topFrame, "parsing string")
 		}
 		varName, frame, err = parseWord(frame.new(varIndex+2, endVarIndex))
 		if err != nil {
@@ -514,7 +516,7 @@ func parseExprFromLex(l *lexer) (node, *ParserError) {
 }
 
 func parseExpr(frame Frame) (node, Frame, *ParserError) {
-	l := lex(frame.str(), frame.start, frame.end)
+	l := lexerFromFrame(frame)
 	l.nextToken(lexExpr)
 	expr, err := parseExprFromLex(l)
 	if err != nil {
@@ -542,7 +544,6 @@ func parseAssign(frame Frame) (string, Frame, *ParserError) {
 }
 
 func parseArgValue(frame Frame) (string, Frame, *ParserError) {
-	println(frame.buf, frame.start, frame.end)
 	if frame.first() == '(' {
 		close := findClosing(frame)
 		if close == frame.end {
@@ -560,11 +561,12 @@ func parseArgValue(frame Frame) (string, Frame, *ParserError) {
 func parseSingleArg(allowedArgs []string, allowedFlags []string, frame Frame) (
 	string, string, Frame, *ParserError,
 ) {
+	topFrame := frame
 	frame = skipWhiteSpaces(frame.forward(1))
 	arg, frame, err := parseWord(frame)
 	if err != nil {
 		return "", "", Frame{}, err.extendMessage("parsing arg name").
-			extend(frame, "parsing argument")
+			extend(topFrame.empty(), "parsing argument")
 	}
 	frame = skipWhiteSpaces(frame)
 	var value string
@@ -572,7 +574,7 @@ func parseSingleArg(allowedArgs []string, allowedFlags []string, frame Frame) (
 		value, frame, err = parseArgValue(frame)
 		if err != nil {
 			return "", "", Frame{}, err.extendMessage("pasing arg value").
-				extend(frame, "parsing argument")
+				extend(topFrame, "parsing argument")
 		}
 	} else if sliceContains(allowedFlags, arg) {
 		value = ""
@@ -843,6 +845,7 @@ func parseEqual(frame Frame) (node, *ParserError) {
 }
 
 func parseVar(frame Frame) (node, *ParserError) {
+	topFrame := frame
 	varName, frame, err := parseAssign(frame)
 	if err != nil {
 		return nil, err.extendMessage("parsing variable assignment")
@@ -854,7 +857,7 @@ func parseVar(frame Frame) (node, *ParserError) {
 		endCommandExpr := findClosing(frame)
 		if endCommandExpr == frame.end {
 			return nil, newParserError(frame, "$( opened but never closed").
-				extend(frame, "parsing variable assignment")
+				extend(topFrame, "parsing variable assignment")
 		}
 		value, err := parseCommand(frame.forward(1).until(endCommandExpr))
 		if err != nil {
@@ -1135,7 +1138,7 @@ func parseCreate(frame Frame) (node, *ParserError) {
 }
 
 func parseOrientation(frame Frame) (node, Frame, *ParserError) {
-	l := lex(frame.str(), frame.start, frame.end)
+	l := lexerFromFrame(frame)
 	tok := l.nextToken(lexOrientation)
 	if tok.t == tokOrientation {
 		return &strLeaf{tok.str}, frame.from(tok.end), nil
@@ -1178,7 +1181,7 @@ func parseTemperature(frame Frame) (node, Frame, *ParserError) {
 }
 
 func parseStringExpr(frame Frame) (node, Frame, *ParserError) {
-	expr, newFrame, err := parseExpr(frame)
+	expr, nextFrame, err := parseExpr(frame)
 	if err != nil {
 		endStr := findNextAmong([]string{" ", "@"}, frame)
 		str, err := parseString(frame.until(endStr))
@@ -1187,7 +1190,7 @@ func parseStringExpr(frame Frame) (node, Frame, *ParserError) {
 		}
 		return str, skipWhiteSpaces(frame.from(endStr)), nil
 	}
-	return expr, newFrame, nil
+	return expr, nextFrame, nil
 }
 
 type objParam struct {

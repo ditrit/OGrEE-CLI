@@ -241,7 +241,6 @@ func lexExpr(l *lexer) stateFn {
 		l.backup()
 		return lexNumber
 	}
-
 	if isLetter(c) {
 		return lexAlphaNumeric
 	}
@@ -353,6 +352,6 @@ func (l *lexer) nextToken(state stateFn) token {
 	}
 }
 
-func lex(input string, start int, end int) *lexer {
+func newLexer(input string, start int, end int) *lexer {
 	return &lexer{input: input, start: start, end: end, pos: start}
 }
