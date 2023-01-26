@@ -4,7 +4,6 @@ import (
 	cmd "cli/controllers"
 	"fmt"
 	"path"
-	"strconv"
 	"strings"
 )
 
@@ -88,13 +87,15 @@ type concatNode struct {
 }
 
 func (n *concatNode) getStr() (string, error) {
-	var r string
+	//var r string
+	r := ""
 	for i := range n.nodes {
 		valAny, err := n.nodes[i].execute()
 		if err != nil {
 			return "", err
 		}
-		switch val := valAny.(type) {
+		r += fmt.Sprintf("%v", valAny)
+		/*switch val := valAny.(type) {
 		case string:
 			r = r + val
 		case int:
@@ -107,7 +108,7 @@ func (n *concatNode) getStr() (string, error) {
 			}
 		default:
 			return "", fmt.Errorf("expression should return a string or an int (concatenation expr %d)", i+1)
-		}
+		}*/
 	}
 	return r, nil
 }
