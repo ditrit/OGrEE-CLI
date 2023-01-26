@@ -82,26 +82,23 @@ func (n pathNode) execute() (interface{}, error) {
 	return n.getStr()
 }
 
-type concatNode struct {
-	nodes []node
+type formatStringNode struct {
+	str       string
+	varsDeref []symbolReferenceNode
 }
 
-func (n *concatNode) getStr() (string, error) {
-	var r string
-	for i := range n.nodes {
-		v, err := n.nodes[i].execute()
+func (n *formatStringNode) getStr() (string, error) {
+	vals := []any{}
+	for _, varDeref := range n.varsDeref {
+		val, err := varDeref.execute()
 		if err != nil {
 			return "", err
 		}
-		s, ok := v.(string)
-		if !ok {
-			return "", fmt.Errorf("Expression should return a string (concatenation expr %d)", i)
-		}
-		r = r + s
+		vals = append(vals, val)
 	}
-	return r, nil
+	return fmt.Sprintf(n.str, vals...), nil
 }
 
-func (n *concatNode) execute() (interface{}, error) {
+func (n *formatStringNode) execute() (interface{}, error) {
 	return n.getStr()
 }
