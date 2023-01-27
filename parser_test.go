@@ -53,6 +53,23 @@ func TestParseWord(t *testing.T) {
 	}
 }
 
+func TestParsePathGroup(t *testing.T) {
+	s := "{ test.plouf.plaf , test.plaf.plouf } a"
+	frame := newFrame(s)
+	paths, nextFrame, err := parsePathGroup(frame)
+	if err != nil {
+		t.Errorf(err.Error())
+	}
+	firstNode := &pathNode{&strLeaf{"test.plouf.plaf"}, STD}
+	secondNode := &pathNode{&strLeaf{"test.plaf.plouf"}, STD}
+	if !reflect.DeepEqual(paths, []node{firstNode, secondNode}) {
+		t.Errorf("wrong path group parsed : %s", spew.Sdump(paths))
+	}
+	if nextFrame.str() != " a" {
+		t.Errorf("wrong next frame")
+	}
+}
+
 func TestParseWordSingleLetter(t *testing.T) {
 	frame := newFrame("a 42")
 	word, nextFrame, err := parseWord(frame)
