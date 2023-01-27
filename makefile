@@ -10,7 +10,7 @@ GITHASHDATE=$(shell git show -s --format=%ci HEAD | sed 's/ /\//g')
 
 #File building dependencies
 FILEDEPS = main.go ast.go semantic.go repl.go ocli.go aststr.go \
- astnum.go astbool.go astflow.go astutil.go completer.go parser.go
+ astnum.go astbool.go astflow.go astutil.go completer.go parser.go lexer.go
 
 main: $(FILEDEPS)
 	go build \-ldflags="-X  cli/controllers.BuildHash=$(GITHASH) \
