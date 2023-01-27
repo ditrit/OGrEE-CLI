@@ -38,6 +38,7 @@ const (
 	tokGtr        // '>'
 	tokLss        // '<'
 	tokOrientation
+	tokText
 )
 
 func (s tokenType) String() string {
@@ -52,7 +53,7 @@ type token struct {
 	start int
 	end   int
 	str   string
-	val   interface{}
+	val   any
 }
 
 func (t token) precedence() int {
@@ -173,6 +174,9 @@ func lexExpr(l *lexer) stateFn {
 		l.ignore()
 		return lexExpr
 	case '$':
+		if l.next() != '{' {
+			return l.errorf("{ expected")
+		}
 		return lexDeref
 	case '"':
 		return lexString
@@ -195,41 +199,39 @@ func lexExpr(l *lexer) stateFn {
 	case '%':
 		return l.emit(tokMod, nil)
 	case '|':
-		if l.next() == '|' {
-			return l.emit(tokOr, nil)
+		if l.next() != '|' {
+			return l.errorf("| expected")
 		}
+		return l.emit(tokOr, nil)
 	case '&':
-		if l.next() == '&' {
-			return l.emit(tokAnd, nil)
+		if l.next() != '&' {
+			return l.errorf("& expected")
 		}
+		return l.emit(tokAnd, nil)
 	case '=':
-		if l.next() == '=' {
-			return l.emit(tokEq, nil)
+		if l.next() != '=' {
+			return l.errorf("= expected")
 		}
+		return l.emit(tokEq, nil)
 	case '!':
-		c = l.next()
-		if c == '=' {
+		if l.next() == '=' {
 			return l.emit(tokNeq, nil)
 		}
-		if c == eof {
-			return l.emit(tokNot, nil)
-		}
+		l.backup()
+		return l.emit(tokNot, nil)
 	case '<':
-		c = l.next()
-		if c == '=' {
+		if l.next() == '=' {
 			return l.emit(tokLeq, nil)
 		}
-		if c == eof {
-			return l.emit(tokLss, nil)
-		}
+		l.backup()
+		return l.emit(tokLss, nil)
 	case '>':
 		c = l.next()
 		if c == '=' {
 			return l.emit(tokGeq, nil)
 		}
-		if c == eof {
-			return l.emit(tokGtr, nil)
-		}
+		l.backup()
+		return l.emit(tokGtr, nil)
 	}
 	if isDigit(c) {
 		return lexNumber
@@ -248,9 +250,6 @@ func lexExpr(l *lexer) stateFn {
 }
 
 func lexDeref(l *lexer) stateFn {
-	if l.next() != '{' {
-		return l.errorf("{ expected")
-	}
 	for isSpace(l.next()) {
 	}
 	l.backup()
@@ -336,6 +335,19 @@ func lexOrientation(l *lexer) stateFn {
 		return l.errorf("invalid orientation")
 	}
 	return l.emit(tokOrientation, nil)
+}
+
+func lexFormattedString(l *lexer) stateFn {
+	c := l.next()
+	if c == eof {
+		return l.emit(tokText, nil)
+	}
+	if c == '&' {
+		if l.accept("{") {
+			return lexDeref
+		}
+	}
+	return lexFormattedString
 }
 
 func (l *lexer) nextToken(state stateFn) token {
