@@ -140,3 +140,29 @@ func TestParseExpr2(t *testing.T) {
 		t.Errorf("unexpected expression : \n%s", spew.Sdump(expr))
 	}
 }
+
+func TestParseAssign(t *testing.T) {
+	frame := newFrame("test= plouf")
+	va, nextFrame, err := parseAssign(frame)
+	if err != nil {
+		t.Errorf("cannot parse assign : %s", err.Error())
+	}
+	if va != "test" {
+		t.Errorf("wrong variable parserd : %s", va)
+	}
+	if nextFrame.str() != " plouf" {
+		t.Errorf("wrong next frame : %s", nextFrame.str())
+	}
+}
+
+func TestParseLs(t *testing.T) {
+	buffer := "ls"
+	n, err := Parse(buffer)
+	if err != nil {
+		t.Errorf("cannot parse ls : %s", err.Error())
+	}
+	expected := &lsNode{&pathNode{&strLeaf{"."}, STD}}
+	if !reflect.DeepEqual(n, expected) {
+		t.Errorf("unexpected expression : \n%s", spew.Sdump(n))
+	}
+}

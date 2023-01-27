@@ -386,8 +386,7 @@ loop:
 
 func parseGenericPath(mode PathMode, frame Frame) (node, Frame, *ParserError) {
 	frame = skipWhiteSpaces(frame)
-	endPath := findNextAmong([]string{" ", "@", ","}, frame)
-	println(frame.str(), " : ", endPath)
+	endPath := findNextAmong([]string{" ", "@", ",", ":"}, frame)
 	if frame.start == endPath {
 		return &pathNode{&strLeaf{"."}, STD}, frame, nil
 	}
