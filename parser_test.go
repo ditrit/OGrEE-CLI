@@ -60,8 +60,8 @@ func TestParsePathGroup(t *testing.T) {
 	if err != nil {
 		t.Errorf(err.Error())
 	}
-	firstNode := &pathNode{&strLeaf{"test.plouf.plaf"}, STD}
-	secondNode := &pathNode{&strLeaf{"test.plaf.plouf"}, STD}
+	firstNode := &pathNode{&strLeaf{"test.plouf.plaf"}}
+	secondNode := &pathNode{&strLeaf{"test.plaf.plouf"}}
 	if !reflect.DeepEqual(paths, []node{firstNode, secondNode}) {
 		t.Errorf("wrong path group parsed : %s", spew.Sdump(paths))
 	}
@@ -155,13 +155,42 @@ func TestParseAssign(t *testing.T) {
 	}
 }
 
+func TestParseLsObj(t *testing.T) {
+	buffer := "lsbldg -s height plouf.plaf - f attr1:attr2 -r"
+	n, err := Parse(buffer)
+	if err != nil {
+		t.Errorf("cannot parse lsobj : %s", err.Error())
+	}
+	path := &pathNode{&strLeaf{"plouf.plaf"}}
+	entity := 2
+	recursive := true
+	sort := "height"
+	attrList := []string{"attr1", "attr2"}
+	format := ""
+	expected := &lsObjNode{path, entity, recursive, sort, attrList, format}
+	if !reflect.DeepEqual(n, expected) {
+		t.Errorf("unexpected lsobj parsing : \n%s", spew.Sdump(n))
+	}
+	buffer = "lsbldg -s height plouf.plaf - f (\"height is %s\", height) -r"
+	n, err = Parse(buffer)
+	if err != nil {
+		t.Errorf("cannot parse lsobj : %s", err.Error())
+	}
+	attrList = []string{"height"}
+	format = "height is %s"
+	expected = &lsObjNode{path, entity, recursive, sort, attrList, format}
+	if !reflect.DeepEqual(n, expected) {
+		t.Errorf("unexpected lsobj parsing : \n%s", spew.Sdump(n))
+	}
+}
+
 func TestParseLs(t *testing.T) {
 	buffer := "ls"
 	n, err := Parse(buffer)
 	if err != nil {
 		t.Errorf("cannot parse ls : %s", err.Error())
 	}
-	expected := &lsNode{&pathNode{&strLeaf{"."}, STD}}
+	expected := &lsNode{&pathNode{&strLeaf{"."}}}
 	if !reflect.DeepEqual(n, expected) {
 		t.Errorf("unexpected expression : \n%s", spew.Sdump(n))
 	}

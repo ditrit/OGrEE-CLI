@@ -384,25 +384,17 @@ loop:
 	return &formatStringNode{s, vars}, nil
 }
 
-func parseGenericPath(mode PathMode, frame Frame) (node, Frame, *ParserError) {
+func parsePath(frame Frame) (node, Frame, *ParserError) {
 	frame = skipWhiteSpaces(frame)
 	endPath := findNextAmong([]string{" ", "@", ",", ":"}, frame)
 	if frame.start == endPath {
-		return &pathNode{&strLeaf{"."}, STD}, frame, nil
+		return &pathNode{&strLeaf{"."}}, frame, nil
 	}
 	path, err := parseRawText(frame.until(endPath))
 	if err != nil {
 		return nil, Frame{}, err.extend(frame, "parsing path")
 	}
-	return &pathNode{path, mode}, skipWhiteSpaces(frame.from(endPath)), nil
-}
-
-func parsePath(frame Frame) (node, Frame, *ParserError) {
-	return parseGenericPath(STD, frame)
-}
-
-func parsePhysicalPath(frame Frame) (node, Frame, *ParserError) {
-	return parseGenericPath(PHYSICAL, frame)
+	return &pathNode{path}, skipWhiteSpaces(frame.from(endPath)), nil
 }
 
 func parsePathGroup(frame Frame) ([]node, Frame, *ParserError) {
@@ -925,11 +917,11 @@ func parseLink(frame Frame) (node, *ParserError) {
 	if len(frames) < 2 || len(frames) > 3 {
 		return nil, newParserError(frame, "too many fields given (separated by @)")
 	}
-	sourcePath, _, err := parsePhysicalPath(frames[0])
+	sourcePath, _, err := parsePath(frames[0])
 	if err != nil {
 		return nil, err.extendMessage("parsing source path (physical)")
 	}
-	destPath, _, err := parsePhysicalPath(frames[1])
+	destPath, _, err := parsePath(frames[1])
 	if err != nil {
 		return nil, err.extendMessage("parsing destination path (physical)")
 	}
@@ -948,12 +940,12 @@ func parseUnlink(frame Frame) (node, *ParserError) {
 	if len(frames) < 1 || len(frames) > 2 {
 		return nil, newParserError(frame, "too many fields given (separated by @)")
 	}
-	sourcePath, _, err := parsePhysicalPath(frames[0])
+	sourcePath, _, err := parsePath(frames[0])
 	if err != nil {
 		return nil, err.extendMessage("parsing source path (physical)")
 	}
 	if len(frames) == 2 {
-		destPath, _, err := parsePhysicalPath(frames[1])
+		destPath, _, err := parsePath(frames[1])
 		if err != nil {
 			return nil, err.extendMessage("parsing destination path (physical)")
 		}
@@ -995,7 +987,7 @@ func parseCd(frame Frame) (node, *ParserError) {
 
 func parseTree(frame Frame) (node, *ParserError) {
 	if frame.start == frame.end {
-		return &treeNode{&pathNode{&strLeaf{"."}, STD}, 0}, nil
+		return &treeNode{&pathNode{&strLeaf{"."}}, 0}, nil
 	}
 	path, frame, err := parsePath(frame)
 	if err != nil {
@@ -1235,7 +1227,7 @@ func parseObjectParams(sig []objParam, startWithAt bool, frame Frame) (map[strin
 		var err *ParserError
 		switch param.t {
 		case "path":
-			value, frame, err = parsePhysicalPath(frame)
+			value, frame, err = parsePath(frame)
 		case "expr":
 			value, frame, err = parseExpr(frame)
 		case "string":
@@ -1339,7 +1331,7 @@ func parseCreateDevice(frame Frame) (node, *ParserError) {
 }
 
 func parseCreateGroup(frame Frame) (node, *ParserError) {
-	path, frame, err := parsePhysicalPath(frame)
+	path, frame, err := parsePath(frame)
 	if err != nil {
 		return nil, err.extendMessage("parsing group physical path")
 	}
@@ -1355,7 +1347,7 @@ func parseCreateGroup(frame Frame) (node, *ParserError) {
 }
 
 func parseCreateCorridor(frame Frame) (node, *ParserError) {
-	path, frame, err := parsePhysicalPath(frame)
+	path, frame, err := parsePath(frame)
 	if err != nil {
 		return nil, err.extendMessage("parsing group physical path")
 	}
@@ -1402,7 +1394,7 @@ func parseCreateOrphanAux(frame Frame, sensor bool) (node, *ParserError) {
 		return nil, newParserError(frame.empty(), ": expected")
 	}
 	frame = skipWhiteSpaces(frame.forward(1))
-	path, frame, err := parsePhysicalPath(frame)
+	path, frame, err := parsePath(frame)
 	if err != nil {
 		return nil, err.extendMessage("parsing orphan physical path")
 	}
@@ -1416,6 +1408,10 @@ func parseCreateOrphanAux(frame Frame, sensor bool) (node, *ParserError) {
 	}
 	return &createOrphanNode{path, template, sensor}, nil
 }
+
+// func parseUpdate(frame Frame) (node, *ParserError) {
+
+// }
 
 func isCommandPrefix(prefix string) bool {
 	for command := range commandDispatch {
