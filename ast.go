@@ -491,10 +491,108 @@ func (n *recursiveUpdateObjNode) execute() (interface{}, error) {
 	return nil, nil
 }
 
+func setRoomAreas(path string, values []any) (map[string]any, error) {
+	if len(values) != 2 {
+		return nil, fmt.Errorf("2 values (reserved, technical) expected to set room areas")
+	}
+	areas := map[string]any{"reserved": values[0], "technical": values[1]}
+	attributes, e := parseAreas(areas)
+	if e != nil {
+		return nil, e
+	}
+	return cmd.UpdateObj(path, "", "", attributes, false)
+}
+
+func addRoomSeparator(path string, values []any) (map[string]any, error) {
+	if len(values) != 3 {
+		return nil, fmt.Errorf("3 values (startPos, endPos, type) expected to add a separator")
+	}
+	startPos, ok := values[0].([]float64)
+	if !ok || len(startPos) != 2 {
+		return nil, fmt.Errorf("startPos should be a vector2")
+	}
+	endPos, ok := values[1].([]float64)
+	if !ok || len(startPos) != 2 {
+		return nil, fmt.Errorf("endPos should be a vector2")
+	}
+	sepType, ok := values[2].(string)
+	if !ok {
+		return nil, fmt.Errorf("type of separator should \"wireframe\" or \"plain\"")
+	}
+	sepType = strings.ToLower(sepType)
+	if sepType != "wireframe" && sepType != "plain" {
+		return nil, fmt.Errorf("type of separator should \"wireframe\" or \"plain\"")
+	}
+	nextSep := map[string]any{"startPosXYm": startPos, "endPosXYm": endPos, "type": sepType}
+	obj, _ := cmd.GetObject(path, true)
+	if obj == nil {
+		return nil, fmt.Errorf("cannot find object")
+	}
+	attr := obj["attributes"].(map[string]any)
+	var sepArray []any
+	separators, _ := attr["separators"]
+	if IsInfArr(separators) {
+		sepArray = separators.([]any)
+		sepArray = append(sepArray, nextSep)
+		sepArrStr, _ := json.Marshal(&sepArray)
+		attr["separators"] = string(sepArrStr)
+	} else {
+		var sepStr string
+		nextSepStr, _ := json.Marshal(nextSep)
+		if IsString(separators) && separators != "" && separators != "[]" {
+			sepStr = separators.(string)
+			size := len(sepStr)
+			sepStr = sepStr[:size-1] + "," + string(nextSepStr) + "]"
+		} else {
+			sepStr = "[" + string(nextSepStr) + "]"
+		}
+		attr["separators"] = sepStr
+	}
+	return cmd.UpdateObj(path, "", "", attr, false)
+}
+
+func setLabel(path string, values []any, hasSharpe bool) (map[string]any, error) {
+	if len(values) != 1 {
+		return nil, fmt.Errorf("only 1 value expected")
+	}
+	value, ok := values[0].(string)
+	if !ok {
+		return nil, fmt.Errorf("value should be a string")
+	}
+	return nil, cmd.InteractObject(path, "label", value, hasSharpe)
+}
+
+func setLabelFont(path string, values []any) (map[string]any, error) {
+	msg := "The font can only be bold or italic" +
+		" or be in the form of color@[colorValue]." +
+		"\n\nFor more information please refer to: " +
+		"\nhttps://github.com/ditrit/OGrEE-3D/wiki/CLI-langage#interact-with-objects"
+
+	switch len(values) {
+	case 1:
+		if values[0] != "bold" && values[0] != "italic" {
+			return nil, fmt.Errorf(msg)
+		}
+		return nil, cmd.InteractObject(path, "labelFont", values[0], false)
+	case 2:
+		if values[0] != "color" {
+			return nil, fmt.Errorf(msg)
+		}
+		c, ok := AssertColor(values[1])
+		if !ok {
+			return nil, fmt.Errorf("Please provide a valid 6 length hex value for the color")
+		}
+		return nil, cmd.InteractObject(path, "labelFont", "color@"+c, false)
+	default:
+		return nil, fmt.Errorf(msg)
+	}
+}
+
 type updateObjNode struct {
-	path       node
-	attributes map[string]interface{}
-	hasSharp   bool //Refers to indexing in 'description' array attributes
+	path      node
+	attr      string
+	values    []node
+	hasSharpe bool
 }
 
 func (n *updateObjNode) execute() (interface{}, error) {
@@ -502,191 +600,40 @@ func (n *updateObjNode) execute() (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	attributes, err := evalMapNodes(n.attributes)
-	if err != nil {
-		return nil, err
+	values := []any{}
+	for _, valueNode := range n.values {
+		val, err := valueNode.execute()
+		if err != nil {
+			return nil, err
+		}
+		values = append(values, val)
 	}
+	value := values[0]
+	attrMap := map[string]any{n.attr: value}
 	if path == "_" {
-		return nil, cmd.UpdateSelection(attributes)
+		if len(values) != 1 {
+			return nil, fmt.Errorf("only one value is expected when updating selection")
+		}
+		return nil, cmd.UpdateSelection(attrMap)
 	}
-
-	//Check if the syntax refers to update or an interact command
-	//
-	for i := range attributes {
-		vals := []string{"label", "labelFont", "content",
-			"alpha", "tilesName", "tilesColor", "U", "slots", "localCS"}
-
-		invalidVals := []string{"separator", "areas"}
-		if AssertInStringValues(i, invalidVals) {
-			msg := "This is invalid syntax. You must specify" +
-				" 2 arrays (and for separator commands, the type) separated by '@' "
-			return nil, fmt.Errorf(msg)
-		}
-
-		if AssertInStringValues(i, vals) {
-			//labelFont should be 'bold' or 'italic' here in this node
-			if i != "labelFont" && i != "label" && !IsBool(attributes[i]) &&
-				attributes[i] != "true" && attributes[i] != "false" {
-				msg := "Only boolean values can be used for interact commands"
-				return nil, fmt.Errorf(msg)
-			}
-
-			if i == "labelFont" && attributes[i] != "bold" && attributes[i] != "italic" {
-				msg := "The font can only be bold or italic" +
-					" or be in the form of color@[colorValue]." +
-					"\n\nFor more information please refer to: " +
-					"\nhttps://github.com/ditrit/OGrEE-3D/wiki/CLI-langage#interact-with-objects"
-				return nil, fmt.Errorf(msg)
-			}
-			return nil, cmd.InteractObject(path, i, attributes[i], n.hasSharp)
-		}
+	switch n.attr {
+	case "label":
+		return setLabel(path, values, n.hasSharpe)
+	case "labelFont":
+		return setLabelFont(path, values)
+	case "separator":
+		return addRoomSeparator(path, values)
+	case "areas":
+		return setRoomAreas(path, values)
 	}
-	return cmd.UpdateObj(path, "", "", attributes, false)
-}
-
-type specialUpdateNode struct {
-	path     node
-	variable string
-	first    node
-	second   node
-	sepType  string
-}
-
-func (n *specialUpdateNode) execute() (interface{}, error) {
-	path, err := AssertString(&n.path, "Object path")
-	if err != nil {
-		return nil, err
+	boolInteractVals := []string{"content", "alpha", "tilesName", "tilesColor", "U", "slots", "localCS"}
+	if AssertInStringValues(n.attr, boolInteractVals) {
+		if !IsBool(value) {
+			return nil, fmt.Errorf("boolean value expected")
+		}
+		return nil, cmd.InteractObject(path, n.attr, value, n.hasSharpe)
 	}
-
-	first, err := n.first.execute()
-	if err != nil {
-		return nil, err
-	}
-	second, err := n.second.execute()
-	if err != nil {
-		return nil, err
-	}
-	if n.variable == "areas" {
-		if n.sepType != "" {
-			return nil, fmt.Errorf("Unrecognised argument. Only 2 arrays can be specified")
-		}
-		areas := map[string]interface{}{"reserved": first, "technical": second}
-		attributes, e := parseAreas(areas)
-		if e != nil {
-			return nil, e
-		}
-		return cmd.UpdateObj(path, "", "", attributes, false)
-	} else if n.variable == "separator" {
-
-		errorResponder := func(attr string, multi bool) (interface{}, error) {
-			var errorMsg string
-			if multi {
-				errorMsg = "Invalid " + attr + " attributes provided." +
-					" They must be arrays/lists/vectors with 2 elements."
-			} else {
-				errorMsg = "Invalid " + attr + " attribute provided." +
-					" It must be an array/list/vector with 2 elements."
-			}
-
-			segment := " Please refer to the wiki or manual reference" +
-				" for more details on how to create objects " +
-				"using this syntax"
-
-			return nil, fmt.Errorf(errorMsg + segment)
-		}
-
-		sepType := strings.ToLower(n.sepType)
-		if sepType != "wireframe" && sepType != "plain" {
-			msg := "Separator type must be specified " +
-				"and can only be 'wireframe' or 'plain'"
-			return nil, fmt.Errorf(msg)
-		}
-
-		if !IsInfArr(first) {
-			if !IsInfArr(second) {
-				return errorResponder("Starting and ending", true)
-			}
-			return errorResponder("Starting", false)
-		}
-
-		if !IsInfArr(second) {
-			return errorResponder("Ending", false)
-		}
-
-		startLen := len(first.([]interface{}))
-		endLen := len(second.([]interface{}))
-
-		if startLen != 2 && endLen == 2 {
-			return errorResponder("starting position", false)
-		}
-
-		if endLen != 2 && startLen == 2 {
-			return errorResponder("ending position", false)
-		}
-
-		if startLen != 2 && endLen != 2 {
-			return errorResponder("starting and ending position", true)
-		}
-
-		obj, _ := cmd.GetObject(path, true)
-		if obj == nil {
-			return nil, fmt.Errorf("cannot find object")
-		}
-		attr := obj["attributes"].(map[string]interface{})
-		var sepArray []interface{}
-		separators, _ := attr["separators"]
-		if IsInfArr(separators) {
-			sepArray = separators.([]interface{})
-			sepArray = append(sepArray, map[string]interface{}{
-				"startPosXYm": first, "endPosXYm": second, "type": sepType})
-
-			sepArrStr, _ := json.Marshal(&sepArray)
-			attr["separators"] = string(sepArrStr)
-		} else {
-			var sepStr string
-			nextSep := map[string]interface{}{
-				"startPosXYm": first, "endPosXYm": second, "type": sepType}
-
-			nextSepStr, _ := json.Marshal(nextSep)
-			if IsString(separators) && separators != "" && separators != "[]" {
-				sepStr = separators.(string)
-				size := len(sepStr)
-				sepStr = sepStr[:size-1] + "," + string(nextSepStr) + "]"
-			} else {
-				sepStr = "[" + string(nextSepStr) + "]"
-			}
-
-			attr["separators"] = sepStr
-		}
-
-		return cmd.UpdateObj(path, "", "", attr, false)
-
-	} else if n.variable == "labelFont" {
-		//This section will be expanded later on as
-		//the language grows
-		if !IsStringValue(first, "color") {
-			msg := "'color' attribute can only specified via this syntax"
-			return nil, fmt.Errorf(msg)
-		}
-
-		c, ok := AssertColor(second)
-		if ok == false {
-			msg := "Please provide a valid 6 length hex value for the color"
-			return nil, fmt.Errorf(msg)
-		}
-		second = "color@" + c
-
-		//attr := map[string]interface{}{}
-
-		return nil,
-			cmd.InteractObject(path, "labelFont", second, false)
-	} else {
-		return nil, fmt.Errorf("Invalid attribute specified for room update")
-	}
-	//Control should not reach here
-	//code added to suppress compiler error
-	return nil, fmt.Errorf("Invalid syntax")
+	return cmd.UpdateObj(path, "", "", attrMap, false)
 }
 
 type easyUpdateNode struct {

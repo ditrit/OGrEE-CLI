@@ -1199,6 +1199,7 @@ func parseTemperature(frame Frame) (node, Frame, *ParserError) {
 func parseStringExpr(frame Frame) (node, Frame, *ParserError) {
 	expr, nextFrame, err := parseExpr(frame)
 	if err != nil {
+		frame = skipWhiteSpaces(frame)
 		endStr := findNextAmong([]string{" ", "@", ","}, frame)
 		str, err := parseRawText(frame.until(endStr))
 		if err != nil {
@@ -1409,9 +1410,35 @@ func parseCreateOrphanAux(frame Frame, sensor bool) (node, *ParserError) {
 	return &createOrphanNode{path, template, sensor}, nil
 }
 
-// func parseUpdate(frame Frame) (node, *ParserError) {
-
-// }
+func parseUpdate(frame Frame) (node, *ParserError) {
+	path, frame, err := parsePath(frame)
+	if err != nil {
+		return nil, err.extendMessage("parsing update")
+	}
+	frame = skipWhiteSpaces(frame)
+	ok, frame := parseExact(":", frame)
+	if !ok {
+		return nil, newParserError(frame.empty(), ": expected")
+	}
+	attr, frame, err := parseAssign(frame)
+	if err != nil {
+		return nil, err.extendMessage("parsing update")
+	}
+	frame = skipWhiteSpaces(frame)
+	sharpe, frame := parseExact("#", frame)
+	values := []node{}
+	moreValues := true
+	for moreValues {
+		var val node
+		val, frame, err = parseStringExpr(frame)
+		if err != nil {
+			return nil, err.extend(frame, "parsing update new value")
+		}
+		values = append(values, val)
+		moreValues, frame = parseExact("@", frame)
+	}
+	return &updateObjNode{path, attr, values, sharpe}, nil
+}
 
 func isCommandPrefix(prefix string) bool {
 	for command := range commandDispatch {
