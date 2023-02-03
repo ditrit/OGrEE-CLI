@@ -192,6 +192,23 @@ func TestParseLs(t *testing.T) {
 	}
 	expected := &lsNode{&pathNode{&strLeaf{"."}}}
 	if !reflect.DeepEqual(n, expected) {
-		t.Errorf("unexpected expression : \n%s", spew.Sdump(n))
+		t.Errorf("unexpected parsing : \n%s", spew.Sdump(n))
+	}
+}
+
+func TestParseUpdate(t *testing.T) {
+	buffer := "coucou.plouf : attr = #val1 @ val2"
+	n, err := Parse(buffer)
+	if err != nil {
+		t.Errorf("cannot parse update : %s", err.Error())
+	}
+	expected := &updateObjNode{
+		&pathNode{&strLeaf{"coucou.plouf"}},
+		"attr",
+		[]node{&strLeaf{"val1"}, &strLeaf{"val2"}},
+		true,
+	}
+	if !reflect.DeepEqual(n, expected) {
+		t.Errorf("unexpected parsing : \n%s", spew.Sdump(n))
 	}
 }

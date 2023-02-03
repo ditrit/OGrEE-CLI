@@ -226,15 +226,15 @@ func parseExact(word string, frame Frame) (bool, Frame) {
 	return false, frame
 }
 
-func parseKeyWord(frame Frame, prefixChecker func(string) bool) (string, Frame, *ParserError) {
+func parseKeyWord(frame Frame, prefixChecker func(string) bool) (string, Frame) {
 	commandEnd := frame.start
 	for commandEnd < frame.end && prefixChecker(frame.until(commandEnd+1).str()) {
 		commandEnd++
 	}
 	if commandEnd == frame.start {
-		return "", Frame{}, newParserError(frame, "command name expected")
+		return "", Frame{}
 	}
-	return frame.until(commandEnd).str(), frame.from(commandEnd), nil
+	return frame.until(commandEnd).str(), frame.from(commandEnd)
 }
 
 func parseWord(frame Frame) (string, Frame, *ParserError) {
@@ -553,6 +553,7 @@ func parseAssign(frame Frame) (string, Frame, *ParserError) {
 	if err != nil {
 		return "", Frame{}, err.extendMessage("parsing word on the left of =")
 	}
+	frame = skipWhiteSpaces(frame)
 	if frame.first() != '=' {
 		return "", Frame{}, newParserError(skipWhiteSpaces(frame).empty(), "= expected")
 	}
@@ -1133,14 +1134,14 @@ func isObjTypePrefix(prefix string) bool {
 	return false
 }
 
-func parseObjType(frame Frame) (string, Frame, *ParserError) {
+func parseObjType(frame Frame) (string, Frame) {
 	return parseKeyWord(frame, isObjTypePrefix)
 }
 
 func parseCreate(frame Frame) (node, *ParserError) {
-	objType, frame, err := parseObjType(frame)
-	if err != nil {
-		return nil, err.extendMessage("parsing object type")
+	objType, frame := parseObjType(frame)
+	if objType == "" {
+		return nil, newParserError(frame, "parsing object type")
 	}
 	frame = skipWhiteSpaces(frame)
 	if objType == "orphan" {
@@ -1459,14 +1460,16 @@ func isCommandPrefix(prefix string) bool {
 	return false
 }
 
-func parseCommandKeyWord(frame Frame) (string, Frame, *ParserError) {
+func parseCommandKeyWord(frame Frame) (string, Frame) {
 	return parseKeyWord(frame, isCommandPrefix)
 }
 
 func parseCommand(frame Frame) (node, *ParserError) {
-	commandKeyWord, frame, err := parseCommandKeyWord(skipWhiteSpaces(frame))
-	if err != nil {
-		return nil, err.extendMessage("parsing command keyword")
+	startFrame := frame
+	commandKeyWord, frame := parseCommandKeyWord(skipWhiteSpaces(frame))
+	println(commandKeyWord)
+	if commandKeyWord == "" {
+		return parseUpdate(frame)
 	}
 	if lsIdx := indexOf(lsCommands, commandKeyWord); lsIdx != -1 {
 		return parseLsObj(lsIdx, skipWhiteSpaces(frame))
@@ -1479,8 +1482,7 @@ func parseCommand(frame Frame) (node, *ParserError) {
 	if ok {
 		return result, nil
 	}
-
-	return nil, newParserError(frame, "unknown command")
+	return parseUpdate(startFrame)
 }
 
 func firstNonAscii(frame Frame) int {
