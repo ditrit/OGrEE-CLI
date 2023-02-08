@@ -560,6 +560,23 @@ func parseAssign(frame Frame) (string, Frame, *ParserError) {
 	return varName, frame.forward(1), nil
 }
 
+func parseIndexing(frame Frame) (node, Frame, *ParserError) {
+	frame = skipWhiteSpaces(frame)
+	ok, frame := parseExact("[", frame)
+	if !ok {
+		return nil, frame, newParserError(frame, "[ expected")
+	}
+	index, frame, err := parseExpr(frame)
+	if err != nil {
+		return nil, frame, err.extend(frame, "parsing indexing")
+	}
+	ok, frame = parseExact("]", frame)
+	if !ok {
+		return nil, frame, newParserError(frame, "] expected")
+	}
+	return index, frame, nil
+}
+
 func parseArgValue(frame Frame) (string, Frame, *ParserError) {
 	if frame.first() == '(' {
 		close := findClosing(frame)
@@ -811,7 +828,16 @@ func parseUnset(frame Frame) (node, *ParserError) {
 		if err != nil {
 			return nil, err.extendMessage("parsing unset path")
 		}
-		return &unsetAttrNode{path}, nil
+		ok, frame := parseExact(":", frame)
+		if !ok {
+			return nil, newParserError(frame, ": expected")
+		}
+		attr, frame, err := parseWord(frame)
+		if err != nil {
+			return nil, err.extend(frame, "parsing attribute name")
+		}
+		index, _, _ := parseIndexing(frame)
+		return &unsetAttrNode{path, attr, index}, nil
 	}
 	if funcName, ok := args["f"]; ok {
 		return &unsetFuncNode{funcName}, nil

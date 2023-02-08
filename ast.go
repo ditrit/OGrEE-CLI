@@ -821,7 +821,9 @@ func (n *unsetVarNode) execute() (interface{}, error) {
 }
 
 type unsetAttrNode struct {
-	path node
+	path  node
+	attr  string
+	index node
 }
 
 func (n *unsetAttrNode) execute() (interface{}, error) {
@@ -831,21 +833,20 @@ func (n *unsetAttrNode) execute() (interface{}, error) {
 	}
 	path, ok := val.(string)
 	if !ok {
-		return nil, fmt.Errorf("Path should be a string")
+		return nil, fmt.Errorf("path should be a string")
 	}
-	arr := strings.Split(path, ":")
-	if len(arr) != 2 {
-		msg := "You must specify the attribute to delete with a colon!\n" +
-			"(ie. $> unset path/to/object:attributex). \n" +
-			"Please refer to the language reference help for more details" +
-			"\n($> man unset)"
-		return nil, fmt.Errorf(msg)
+	if n.index != nil {
+		idxAny, err := n.index.execute()
+		if err != nil {
+			return nil, err
+		}
+		idx, ok := idxAny.(int)
+		if !ok {
+			return nil, fmt.Errorf("index should be an integer")
+		}
+		return cmd.UnsetInObj(path, n.attr, idx)
 	}
-	path = arr[0]
-	data := map[string]interface{}{arr[1]: nil}
-
-	return cmd.UpdateObj(path, "", "", data, true)
-
+	return cmd.UpdateObj(path, "", "", map[string]any{n.attr: nil}, true)
 }
 
 type setEnvNode struct {
