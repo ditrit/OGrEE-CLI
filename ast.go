@@ -123,35 +123,6 @@ func (n *postObjNode) execute() (interface{}, error) {
 	return cmd.PostObj(cmd.EntityStrToInt(n.entity), n.entity, n.data)
 }
 
-type easyPostNode struct {
-	entity string
-	path   node
-}
-
-func (n *easyPostNode) execute() (interface{}, error) {
-	val, err := n.path.execute()
-	if err != nil {
-		return nil, err
-	}
-	path, ok := val.(string)
-	if !ok {
-		return nil, fmt.Errorf("Path should be a string")
-	}
-
-	data := make(map[string]interface{})
-	/*x, e := ioutil.ReadFile(n.path)
-	if e != nil {
-		println("Error while opening file! " + e.Error())
-		return nil
-	}
-	json.Unmarshal(x, &data)*/
-	data = fileToJSON(path)
-	if data == nil {
-		return nil, fmt.Errorf("Cannot read json file.")
-	}
-	return cmd.PostObj(cmd.EntityStrToInt(n.entity), n.entity, data)
-}
-
 type helpNode struct {
 	entry string
 }
@@ -530,7 +501,7 @@ func addRoomSeparator(path string, values []any) (map[string]any, error) {
 	}
 	attr := obj["attributes"].(map[string]any)
 	var sepArray []any
-	separators, _ := attr["separators"]
+	separators := attr["separators"]
 	if IsInfArr(separators) {
 		sepArray = separators.([]any)
 		sepArray = append(sepArray, nextSep)
@@ -580,7 +551,7 @@ func setLabelFont(path string, values []any) (map[string]any, error) {
 		}
 		c, ok := AssertColor(values[1])
 		if !ok {
-			return nil, fmt.Errorf("Please provide a valid 6 length hex value for the color")
+			return nil, fmt.Errorf("please provide a valid 6 length hex value for the color")
 		}
 		return nil, cmd.InteractObject(path, "labelFont", "color@"+c, false)
 	default:
@@ -634,21 +605,6 @@ func (n *updateObjNode) execute() (interface{}, error) {
 		return nil, cmd.InteractObject(path, n.attr, value, n.hasSharpe)
 	}
 	return cmd.UpdateObj(path, "", "", attrMap, false)
-}
-
-type easyUpdateNode struct {
-	nodePath     string
-	jsonPath     string
-	deleteAndPut bool
-}
-
-func (n *easyUpdateNode) execute() (interface{}, error) {
-	data := make(map[string]interface{})
-	data = fileToJSON(n.jsonPath)
-	if data == nil {
-		return nil, fmt.Errorf("Cannot open json file")
-	}
-	return cmd.UpdateObj(n.nodePath, "", "", data, n.deleteAndPut)
 }
 
 type lsObjNode struct {
@@ -936,7 +892,7 @@ func (n *createTenantNode) execute() (interface{}, error) {
 	}
 	path, ok := pathVal.(string)
 	if !ok {
-		return nil, fmt.Errorf("Path should be a string")
+		return nil, fmt.Errorf("path should be a string")
 	}
 	colorInf, err := n.color.execute()
 	if err != nil {
@@ -944,11 +900,10 @@ func (n *createTenantNode) execute() (interface{}, error) {
 	}
 	color, ok := AssertColor(colorInf)
 	if !ok {
-		msg := "Please provide a valid 6 length hex value for the color"
-		return nil, fmt.Errorf(msg)
+		return nil, fmt.Errorf("please provide a valid 6 length hex value for the color")
 	}
-	attributes := map[string]any{"attributes": map[string]any{"color": color}}
-	err = cmd.GetOCLIAtrributes(path, cmd.TENANT, attributes)
+	attributes := map[string]any{"color": color}
+	err = cmd.GetOCLIAtrributes(path, cmd.TENANT, map[string]any{"attributes": attributes})
 	if err != nil {
 		return nil, err
 	}
@@ -967,7 +922,7 @@ func (n *createSiteNode) execute() (interface{}, error) {
 	}
 	path, ok := pathVal.(string)
 	if !ok {
-		return nil, fmt.Errorf("Path should be a string")
+		return nil, fmt.Errorf("path should be a string")
 	}
 	orientationAny, err := n.orientation.execute()
 	if err != nil {
@@ -978,10 +933,10 @@ func (n *createSiteNode) execute() (interface{}, error) {
 		return nil, fmt.Errorf("orientation should be a string")
 	}
 	if !checkIfOrientation(orientation) {
-		return nil, fmt.Errorf("You must provide a valid orientation")
+		return nil, fmt.Errorf("you must provide a valid orientation")
 	}
-	attributes := map[string]any{"attributes": map[string]any{"orientation": orientation}}
-	err = cmd.GetOCLIAtrributes(path, cmd.SITE, attributes)
+	attributes := map[string]any{"orientation": orientation}
+	err = cmd.GetOCLIAtrributes(path, cmd.SITE, map[string]any{"attributes": attributes})
 	if err != nil {
 		return nil, err
 	}
@@ -989,9 +944,10 @@ func (n *createSiteNode) execute() (interface{}, error) {
 }
 
 type createBuildingNode struct {
-	path  node
-	posXY node
-	size  node
+	path           node
+	posXY          node
+	rotation       node
+	sizeOrTemplate node
 }
 
 func (n *createBuildingNode) execute() (interface{}, error) {
@@ -1001,18 +957,41 @@ func (n *createBuildingNode) execute() (interface{}, error) {
 	}
 	path, ok := pathVal.(string)
 	if !ok {
-		return nil, fmt.Errorf("Path should be a string")
+		return nil, fmt.Errorf("path should be a string")
 	}
-	posXY, err := n.posXY.execute()
+	posXYany, err := n.posXY.execute()
 	if err != nil {
 		return nil, err
 	}
-	size, err := n.size.execute()
+	posXY, ok := posXYany.([]float64)
+	if !ok || len(posXY) != 2 {
+		return nil, fmt.Errorf("posXY should be a vector2")
+	}
+	rotationAny, err := n.rotation.execute()
 	if err != nil {
 		return nil, err
 	}
-	attributes := map[string]any{"attributes": map[string]any{"posXY": posXY, "size": size}}
-	err = cmd.GetOCLIAtrributes(path, cmd.BLDG, attributes)
+	rotation, err := getFloat(rotationAny)
+	if err != nil {
+		return nil, fmt.Errorf("rotation should be a number")
+	}
+	attributes := map[string]any{"posXY": posXY, "rotation": rotation}
+
+	sizeOrTemplateAny, err := n.sizeOrTemplate.execute()
+	if err != nil {
+		return nil, err
+	}
+	template, ok := sizeOrTemplateAny.(string)
+	if ok && checkIfTemplate(template) {
+		attributes["template"] = template
+	} else {
+		size, ok := sizeOrTemplateAny.([]float64)
+		if !ok || len(size) != 3 {
+			return nil, fmt.Errorf("vector3 (size) or string (template) expected")
+		}
+		attributes["size"] = size
+	}
+	err = cmd.GetOCLIAtrributes(path, cmd.BLDG, map[string]any{"attributes": attributes})
 	if err != nil {
 		return nil, err
 	}
@@ -1025,6 +1004,7 @@ type createRoomNode struct {
 	size        node
 	orientation node
 	floorUnit   node
+	template    node
 }
 
 func (n *createRoomNode) execute() (interface{}, error) {
@@ -1034,11 +1014,23 @@ func (n *createRoomNode) execute() (interface{}, error) {
 	}
 	path, ok := pathVal.(string)
 	if !ok {
-		return nil, fmt.Errorf("Path should be a string")
+		return nil, fmt.Errorf("path should be a string")
 	}
-	posXY, err := n.posXY.execute()
+	posXYany, err := n.posXY.execute()
 	if err != nil {
 		return nil, err
+	}
+	posXY, ok := posXYany.([]float64)
+	if !ok || len(posXY) != 2 {
+		return nil, fmt.Errorf("posXY should be a vector2")
+	}
+	templateAny, err := n.template.execute()
+	if err != nil {
+		return nil, err
+	}
+	template, ok := templateAny.(string)
+	if ok && checkIfTemplate(template) {
+		return nil, fmt.Errorf("template path should be a string")
 	}
 	size, err := n.size.execute()
 	if err != nil {
@@ -1052,7 +1044,7 @@ func (n *createRoomNode) execute() (interface{}, error) {
 	if !ok {
 		return nil, fmt.Errorf("orientation should be a string")
 	}
-	attributes := map[string]any{"attributes": map[string]any{"posXY": posXY, "size": size, "orientation": orientation}}
+	attributes := map[string]any{"posXY": posXY, "size": size, "orientation": orientation}
 	if n.floorUnit != nil {
 		floorUnitAny, err := n.floorUnit.execute()
 		if err != nil {
@@ -1062,44 +1054,9 @@ func (n *createRoomNode) execute() (interface{}, error) {
 		if !ok {
 			return nil, fmt.Errorf("floorUnit should be a string")
 		}
-		attributes["attributes"].(map[string]any)["floorUnit"] = floorUnit
+		attributes["floorUnit"] = floorUnit
 	}
-	err = cmd.GetOCLIAtrributes(path, cmd.ROOM, attributes)
-	if err != nil {
-		return nil, err
-	}
-	return nil, nil
-}
-
-type createRoomFromTemplateNode struct {
-	path     node
-	posXY    node
-	template node
-}
-
-func (n *createRoomFromTemplateNode) execute() (interface{}, error) {
-	pathVal, err := n.path.execute()
-	if err != nil {
-		return nil, err
-	}
-	path, ok := pathVal.(string)
-	if !ok {
-		return nil, fmt.Errorf("Path should be a string")
-	}
-	posXY, err := n.posXY.execute()
-	if err != nil {
-		return nil, err
-	}
-	templateAny, err := n.template.execute()
-	if err != nil {
-		return nil, err
-	}
-	template, ok := templateAny.(string)
-	if !ok {
-		return nil, fmt.Errorf("template path should be a string")
-	}
-	attributes := map[string]any{"attributes": map[string]any{"posXY": posXY, "template": template}}
-	err = cmd.GetOCLIAtrributes(path, cmd.ROOM, attributes)
+	err = cmd.GetOCLIAtrributes(path, cmd.ROOM, map[string]any{"attributes": attributes})
 	if err != nil {
 		return nil, err
 	}
@@ -1120,30 +1077,41 @@ func (n *createRackNode) execute() (interface{}, error) {
 	}
 	path, ok := pathVal.(string)
 	if !ok {
-		return nil, fmt.Errorf("Path should be a string")
+		return nil, fmt.Errorf("path should be a string")
 	}
-	posXY, err := n.posXY.execute()
+	posXYany, err := n.posXY.execute()
 	if err != nil {
 		return nil, err
 	}
-	orientation, err := n.orientation.execute()
+	posXY, ok := posXYany.([]float64)
+	if !ok || len(posXY) != 2 {
+		return nil, fmt.Errorf("posXY should be a vector2")
+	}
+	orientationAny, err := n.orientation.execute()
 	if err != nil {
 		return nil, err
 	}
-	sizeOrTemplate, err := n.sizeOrTemplate.execute()
+	orientation, ok := orientationAny.(string)
+	if !ok || (orientation != "front" && orientation != "rear" && orientation != "left" && orientation != "right") {
+		return nil, fmt.Errorf("orientation should be a front, rear, left or right")
+	}
+	attributes := map[string]any{"posXY": posXY, "orientation": orientation}
+
+	sizeOrTemplateAny, err := n.sizeOrTemplate.execute()
 	if err != nil {
 		return nil, err
 	}
-	attr := make(map[string]interface{})
-	if !checkIfTemplate(sizeOrTemplate) {
-		attr["size"] = sizeOrTemplate
+	template, ok := sizeOrTemplateAny.(string)
+	if ok && checkIfTemplate(template) {
+		attributes["template"] = template
 	} else {
-		attr["template"] = sizeOrTemplate
+		size, ok := sizeOrTemplateAny.([]float64)
+		if !ok || len(size) != 3 {
+			return nil, fmt.Errorf("vector3 (size) or string (template) expected")
+		}
+		attributes["size"] = size
 	}
-	attr["posXY"] = posXY
-	attr["orientation"] = orientation
-	attributes := map[string]interface{}{"attributes": attr}
-	err = cmd.GetOCLIAtrributes(path, cmd.RACK, attributes)
+	err = cmd.GetOCLIAtrributes(path, cmd.RACK, map[string]any{"attributes": attributes})
 	if err != nil {
 		return nil, err
 	}
@@ -1164,17 +1132,18 @@ func (n *createDeviceNode) execute() (interface{}, error) {
 	}
 	path, ok := val.(string)
 	if !ok {
-		return nil, fmt.Errorf("Path should be a string")
+		return nil, fmt.Errorf("path should be a string")
 	}
 	posUOrSlot, err := n.posUOrSlot.execute()
 	if err != nil {
 		return nil, err
 	}
+	attr := map[string]any{"posU/slot": posUOrSlot}
+
 	sizeUOrTemplate, err := n.sizeUOrTemplate.execute()
 	if err != nil {
 		return nil, err
 	}
-	attr := map[string]interface{}{"posU/slot": posUOrSlot}
 	if !checkIfTemplate(sizeUOrTemplate) {
 		attr["sizeU"] = sizeUOrTemplate
 	} else {
@@ -1207,7 +1176,7 @@ func (n *createGroupNode) execute() (interface{}, error) {
 	}
 	path, ok := val.(string)
 	if !ok {
-		return nil, fmt.Errorf("Path should be a string")
+		return nil, fmt.Errorf("path should be a string")
 	}
 	var objs []string
 	data := map[string]interface{}{}
@@ -1262,7 +1231,7 @@ func (n *createCorridorNode) execute() (interface{}, error) {
 	tempIsValid := AssertInStringValues(temp, []string{"warm", "cold"})
 	if !tempIsValid {
 		return nil,
-			fmt.Errorf("Temperature should be either 'warm' or 'cold'")
+			fmt.Errorf("temperature should be either 'warm' or 'cold'")
 	}
 	leftRack = filepath.Base(leftRack)
 	rightRack = filepath.Base(rightRack)
@@ -1302,7 +1271,7 @@ func (n *createOrphanNode) execute() (interface{}, error) {
 	if !ok {
 		return nil, fmt.Errorf("template path should be a string")
 	}
-	attributes := map[string]interface{}{"attributes": map[string]any{"template": template}}
+	attributes := map[string]any{"template": template}
 
 	var t int
 	if n.sensor {
@@ -1310,7 +1279,7 @@ func (n *createOrphanNode) execute() (interface{}, error) {
 	} else {
 		t = cmd.STRAY_DEV
 	}
-	err = cmd.GetOCLIAtrributes(path, t, attributes)
+	err = cmd.GetOCLIAtrributes(path, t, map[string]any{"attributes": attributes})
 	if err != nil {
 		return nil, err
 	}

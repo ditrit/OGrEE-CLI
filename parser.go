@@ -1185,6 +1185,10 @@ func parseRackOrientation(frame Frame) (node, Frame, *ParserError) {
 	return parseKeyWordOrExpr([]string{"front", "rear", "left", "right"}, frame)
 }
 
+func parseAxisOrientation(frame Frame) (node, Frame, *ParserError) {
+	return parseKeyWordOrExpr([]string{"+x+y", "+x-y", "-x-y", "-x+y"}, frame)
+}
+
 func parseFloorUnit(frame Frame) (node, Frame, *ParserError) {
 	return parseKeyWordOrExpr([]string{"t", "m", "f"}, frame)
 }
@@ -1232,10 +1236,12 @@ func parseObjectParams(sig []objParam, startWithAt bool, frame Frame) (map[strin
 			value, frame, err = parsePath(frame)
 		case "expr":
 			value, frame, err = parseExpr(frame)
-		case "string":
+		case "stringexpr":
 			value, frame, err = parseStringExpr(frame)
 		case "orientation":
 			value, frame, err = parseOrientation(frame)
+		case "axisOrientation":
+			value, frame, err = parseAxisOrientation(frame)
 		case "rackOrientation":
 			value, frame, err = parseRackOrientation(frame)
 		case "floorUnit":
@@ -1270,44 +1276,58 @@ func parseCreateSite(frame Frame) (node, *ParserError) {
 }
 
 func parseCreateBuilding(frame Frame) (node, *ParserError) {
-	sig := []objParam{{"path", "path"}, {"posXY", "expr"}, {"size", "expr"}}
+	sig := []objParam{{"path", "path"}, {"posXY", "expr"}, {"rotation", "expr"}, {"sizeOrTemplate", "stringexpr"}}
 	params, _, err := parseObjectParams(sig, false, frame)
 	if err != nil {
 		return nil, err.extendMessage("parsing building parameters")
 	}
-	return &createBuildingNode{params["path"], params["posXY"], params["size"]}, nil
+	return &createBuildingNode{params["path"], params["posXY"], params["rotation"], params["sizeOrTemplate"]}, nil
 }
 
 func parseCreateRoom(frame Frame) (node, *ParserError) {
-	sig := []objParam{{"path", "path"}, {"posXY", "expr"}, {"sizeOrTemplate", "string"}}
+	sig := []objParam{{"path", "path"}, {"posXY", "expr"}, {"rotation", "expr"}, {"sizeOrTemplate", "stringexpr"}}
 	params1, frame, err := parseObjectParams(sig, false, frame)
 	if err != nil {
 		return nil, err.extendMessage("parsing room parameters")
 	}
 	if frame.start == frame.end {
-		return &createRoomFromTemplateNode{params1["path"], params1["posXY"], params1["sizeOrTemplate"]}, nil
+		return &createRoomNode{
+			params1["path"],
+			params1["posXY"],
+			params1["rotation"],
+			nil, nil,
+			params1["sizeOrTemplate"]}, nil
 	}
-	sig = []objParam{{"orientation", "orientation"}}
+	sig = []objParam{{"orientation", "axisOrientation"}}
 	params2, frame, err := parseObjectParams(sig, true, frame)
 	if err != nil {
 		return nil, err.extendMessage("parsing room parameters")
 	}
 	if frame.start == frame.end {
-		return &createRoomNode{params1["path"], params1["posXY"],
-			params1["sizeOrTemplate"], params2["orientation"], nil}, nil
+		return &createRoomNode{
+			params1["path"],
+			params1["posXY"],
+			params1["rotation"],
+			params1["sizeOrTemplate"],
+			params2["orientation"], nil}, nil
 	}
 	sig = []objParam{{"floorUnit", "floorUnit"}}
 	params3, frame, err := parseObjectParams(sig, true, frame)
 	if err != nil {
 		return nil, err.extendMessage("parsing room parameters")
 	}
-	return &createRoomNode{params1["path"], params1["posXY"],
-		params1["sizeOrTemplate"], params2["orientation"], params3["floorUnit"]}, nil
+	return &createRoomNode{
+		params1["path"],
+		params1["posXY"],
+		params1["rotation"],
+		params1["sizeOrTemplate"],
+		params2["orientation"],
+		params3["floorUnit"]}, nil
 }
 
 func parseCreateRack(frame Frame) (node, *ParserError) {
 	sig := []objParam{{"path", "path"}, {"posXY", "expr"},
-		{"sizeOrTemplate", "string"}, {"orientation", "rackOrientation"}}
+		{"sizeOrTemplate", "stringexpr"}, {"orientation", "rackOrientation"}}
 	params, _, err := parseObjectParams(sig, false, frame)
 	if err != nil {
 		return nil, err.extendMessage("parsing rack parameters")
@@ -1316,7 +1336,7 @@ func parseCreateRack(frame Frame) (node, *ParserError) {
 }
 
 func parseCreateDevice(frame Frame) (node, *ParserError) {
-	sig := []objParam{{"path", "path"}, {"posUOrSlot", "expr"}, {"sizeUOrTemplate", "string"}}
+	sig := []objParam{{"path", "path"}, {"posUOrSlot", "expr"}, {"sizeUOrTemplate", "stringexpr"}}
 	params1, frame, err := parseObjectParams(sig, false, frame)
 	if err != nil {
 		return nil, err.extendMessage("parsing device parameters")
