@@ -1562,7 +1562,7 @@ func parseCommandKeyWord(frame Frame) (string, Frame) {
 	return parseKeyWord(candidates, frame)
 }
 
-func parseCommand(frame Frame) (node, *ParserError) {
+func parseSingleCommand(frame Frame) (node, *ParserError) {
 	startFrame := frame
 	commandKeyWord, frame := parseCommandKeyWord(skipWhiteSpaces(frame))
 	if commandKeyWord == "" {
@@ -1580,6 +1580,22 @@ func parseCommand(frame Frame) (node, *ParserError) {
 		return result, nil
 	}
 	return parseUpdate(startFrame)
+}
+
+func parseCommand(frame Frame) (node, *ParserError) {
+	commandFrames := splitFrameOn(";", frame)
+	statements := []node{}
+	for _, frame := range commandFrames {
+		command, err := parseSingleCommand(frame)
+		if err != nil {
+			return nil, err.extend(frame, "parsing command")
+		}
+		statements = append(statements, command)
+	}
+	if len(statements) == 1 {
+		return statements[0], nil
+	}
+	return &ast{statements}, nil
 }
 
 func firstNonAscii(frame Frame) int {
