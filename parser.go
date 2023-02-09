@@ -232,12 +232,12 @@ func findClosing(frame Frame) int {
 }
 
 func splitFrameOn(sep string, frame Frame) []Frame {
-	bufs := strings.Split(frame.str(), sep)
 	frames := []Frame{}
 	cursor := frame.start
-	for _, buf := range bufs {
-		frames = append(frames, frame.new(cursor, cursor+len(buf)))
-		cursor += len(sep)
+	for cursor < frame.end {
+		next := findNext(sep, frame)
+		frames = append(frames, frame.new(cursor, next))
+		cursor = next + 1
 	}
 	return frames
 }
