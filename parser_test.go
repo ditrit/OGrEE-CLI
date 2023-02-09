@@ -193,45 +193,33 @@ func TestParseLsObj(t *testing.T) {
 	testCommand(buffer, expected, t)
 }
 
-func TestParseLs(t *testing.T) {
-	testCommand("ls", &lsNode{&pathNode{&strLeaf{"."}}}, t)
+var commandsMatching = map[string]node{
+	"ls":                  &lsNode{&pathNode{&strLeaf{"."}}},
+	"get toto.tata":       &getObjectNode{&pathNode{&strLeaf{"toto.tata"}}},
+	"getu rackA 42":       &getUNode{&pathNode{&strLeaf{"rackA"}}, &intLeaf{42}},
+	"undraw":              &undrawNode{nil},
+	"undraw toto.tata":    &undrawNode{&pathNode{&strLeaf{"toto.tata"}}},
+	"draw":                &drawNode{&pathNode{&strLeaf{"."}}, 0, false},
+	"draw toto.tata":      &drawNode{&pathNode{&strLeaf{"toto.tata"}}, 0, false},
+	"draw toto.tata 4":    &drawNode{&pathNode{&strLeaf{"toto.tata"}}, 4, false},
+	"draw -f":             &drawNode{&pathNode{&strLeaf{"."}}, 0, true},
+	"draw -f toto.tata":   &drawNode{&pathNode{&strLeaf{"toto.tata"}}, 0, true},
+	"draw toto.tata 4 -f": &drawNode{&pathNode{&strLeaf{"toto.tata"}}, 4, true},
 }
 
-func TestParseGet(t *testing.T) {
-	testCommand("get toto.tata", &getObjectNode{&pathNode{&strLeaf{"toto.tata"}}}, t)
-}
-
-func TestPareGetU(t *testing.T) {
-	testCommand("getu rackA 42", &getUNode{&pathNode{&strLeaf{"rackA"}}, &intLeaf{42}}, t)
-}
-
-func TestUndraw(t *testing.T) {
-	testCommand("undraw", &undrawNode{nil}, t)
-	testCommand("undraw toto.tata", &undrawNode{&pathNode{&strLeaf{"toto.tata"}}}, t)
-}
-
-func TestDraw(t *testing.T) {
-	testCommand("draw", &drawNode{&pathNode{&strLeaf{"."}}, 0, false}, t)
-	testCommand("draw toto.tata", &drawNode{&pathNode{&strLeaf{"toto.tata"}}, 0, false}, t)
-	testCommand("draw toto.tata 4", &drawNode{&pathNode{&strLeaf{"toto.tata"}}, 4, false}, t)
-	testCommand("draw -f", &drawNode{&pathNode{&strLeaf{"."}}, 0, true}, t)
-	testCommand("draw -f toto.tata", &drawNode{&pathNode{&strLeaf{"toto.tata"}}, 0, true}, t)
-	testCommand("draw toto.tata 4 -f", &drawNode{&pathNode{&strLeaf{"toto.tata"}}, 4, true}, t)
+func TestSimpleCommands(t *testing.T) {
+	for command, tree := range commandsMatching {
+		testCommand(command, tree, t)
+	}
 }
 
 func TestParseUpdate(t *testing.T) {
 	buffer := "coucou.plouf : attr = #val1 @ val2"
-	n, err := Parse(buffer)
-	if err != nil {
-		t.Errorf("cannot parse update : %s", err.Error())
-	}
 	expected := &updateObjNode{
 		&pathNode{&strLeaf{"coucou.plouf"}},
 		"attr",
 		[]node{&strLeaf{"val1"}, &strLeaf{"val2"}},
 		true,
 	}
-	if !reflect.DeepEqual(n, expected) {
-		t.Errorf("unexpected parsing : \n%s", spew.Sdump(n))
-	}
+	testCommand(buffer, expected, t)
 }
