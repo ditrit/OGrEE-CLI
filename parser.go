@@ -771,7 +771,7 @@ func parseGetU(frame Frame) (node, *ParserError) {
 	if frame.start == frame.end {
 		return &getUNode{path, 0}, nil
 	}
-	u, _, err := parseInt(frame)
+	u, _, err := parseExpr(frame)
 	if err != nil {
 		return nil, err.extendMessage("parsing getu depth")
 	}
