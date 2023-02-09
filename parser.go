@@ -159,6 +159,21 @@ func skipWhiteSpaces(frame Frame) Frame {
 	return frame.from(i)
 }
 
+func findKeyword(keyword string, frame Frame) int {
+	inStr := false
+	for startPos := frame.start; startPos <= frame.end-len(keyword); startPos++ {
+		c := frame.char(startPos)
+		if c == '"' {
+			inStr = !inStr
+			continue
+		}
+		if !inStr && frame.new(startPos, startPos+len(keyword)).str() == keyword {
+			return startPos
+		}
+	}
+	return frame.end
+}
+
 func findNext(substring string, frame Frame) int {
 	idx := strings.Index(frame.str(), substring)
 	if idx != -1 {
@@ -176,6 +191,14 @@ func findNextAmong(substringList []string, frame Frame) int {
 		}
 	}
 	return firstIdx
+}
+
+func findNextQuote(frame Frame) int {
+	idx := strings.Index(frame.str(), "\"")
+	if idx == -1 {
+		return frame.end
+	}
+	return frame.start + idx
 }
 
 func findClosing(frame Frame) int {
@@ -226,9 +249,18 @@ func parseExact(word string, frame Frame) (bool, Frame) {
 	return false, frame
 }
 
-func parseKeyWord(frame Frame, prefixChecker func(string) bool) (string, Frame) {
+func isPrefix(prefix string, candidates []string) bool {
+	for _, candidate := range candidates {
+		if strings.HasPrefix(candidate, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+func parseKeyWord(candidates []string, frame Frame) (string, Frame) {
 	commandEnd := frame.start
-	for commandEnd < frame.end && prefixChecker(frame.until(commandEnd+1).str()) {
+	for commandEnd < frame.end && isPrefix(frame.until(commandEnd+1).str(), candidates) {
 		commandEnd++
 	}
 	if commandEnd == frame.start {
@@ -585,7 +617,7 @@ func parseArgValue(frame Frame) (string, Frame, *ParserError) {
 		}
 		return frame.until(close + 1).str(), frame.from(close + 1), nil
 	} else if frame.first() == '"' {
-		endQuote := findNext("\"", frame)
+		endQuote := findNextQuote(frame)
 		return frame.until(endQuote).str(), frame.from(endQuote + 1), nil
 	}
 	endValue := findNext(" ", frame)
@@ -689,8 +721,8 @@ func parseLsObj(lsIdx int, frame Frame) (node, *ParserError) {
 	if formatArg, ok := args["f"]; ok {
 		if regexMatch(`\(\s*".*"\s*,.+\)`, formatArg) {
 			formatFrame := Frame{formatArg, 1, len(formatArg)}
-			startFormat := findNext("\"", formatFrame)
-			endFormat := findNext("\"", formatFrame.from(startFormat+1))
+			startFormat := findNextQuote(formatFrame)
+			endFormat := findNextQuote(formatFrame.from(startFormat + 1))
 			format = formatArg[startFormat+1 : endFormat]
 			cursor := findNext(",", formatFrame.from(endFormat)) + 1
 			attrList, err = parseSeparatedWords(',', formatFrame.new(cursor, len(formatArg)-1))
@@ -1151,17 +1183,51 @@ func parseFor(frame Frame) (node, *ParserError) {
 	return &forRangeNode{varName, start, end, body}, nil
 }
 
-func isObjTypePrefix(prefix string) bool {
-	for command := range createObjDispatch {
-		if strings.HasPrefix(command, prefix) {
-			return true
-		}
+func parseIf(frame Frame) (node, *ParserError) {
+	condition, frame, err := parseExpr(frame)
+	if err != nil {
+		return nil, err
 	}
-	return false
+	ok, frame := parseExact("then", frame)
+	if !ok {
+		return nil, newParserError(frame, "then expected")
+	}
+	body, err := parseCommand(frame)
+	if err != nil {
+		return nil, err.extend(frame, "parsing if body")
+	}
+	keyword, frame := parseKeyWord([]string{"fi", "else", "elif"}, frame)
+	switch keyword {
+	case "fi":
+		return &ifNode{condition, body, nil}, nil
+	case "else":
+		fiIdx := findKeyword(" fi", frame)
+		if fiIdx == frame.end {
+			return nil, newParserError(frame, "fi expected")
+		}
+		elseBody, err := parseCommand(frame.until(fiIdx))
+		if err != nil {
+			return nil, err.extend(frame, "")
+		}
+		return &ifNode{condition, body, elseBody}, nil
+	case "elif":
+		frame := frame.new(frame.start-2, frame.end)
+		elseBody, err := parseIf(frame)
+		if err != nil {
+			return nil, err.extend(frame, "parsing elif body")
+		}
+		return &ifNode{condition, body, elseBody}, nil
+	default:
+		return nil, newParserError(frame, "expected fi, else or elif")
+	}
 }
 
 func parseObjType(frame Frame) (string, Frame) {
-	return parseKeyWord(frame, isObjTypePrefix)
+	candidates := []string{}
+	for command := range createObjDispatch {
+		candidates = append(candidates, command)
+	}
+	return parseKeyWord(candidates, frame)
 }
 
 func parseCreate(frame Frame) (node, *ParserError) {
@@ -1194,11 +1260,9 @@ func parseOrientation(frame Frame) (node, Frame, *ParserError) {
 }
 
 func parseKeyWordOrExpr(keywords []string, frame Frame) (node, Frame, *ParserError) {
-	for _, v := range keywords {
-		ok, newFrame := parseExact(v, frame)
-		if ok {
-			return &strLeaf{v}, newFrame, nil
-		}
+	keyword, newFrame := parseKeyWord(keywords, frame)
+	if keyword != "" {
+		return &strLeaf{keyword}, newFrame, nil
 	}
 	expr, newFrame, err := parseExpr(frame)
 	if err != nil {
@@ -1229,16 +1293,16 @@ func parseTemperature(frame Frame) (node, Frame, *ParserError) {
 
 func parseStringExpr(frame Frame) (node, Frame, *ParserError) {
 	expr, nextFrame, err := parseExpr(frame)
-	if err != nil {
-		frame = skipWhiteSpaces(frame)
-		endStr := findNextAmong([]string{" ", "@", ","}, frame)
-		str, err := parseRawText(frame.until(endStr))
-		if err != nil {
-			return nil, Frame{}, err.extend(frame, "parsing string expression")
-		}
-		return str, skipWhiteSpaces(frame.from(endStr)), nil
+	if err == nil {
+		return expr, nextFrame, nil
 	}
-	return expr, nextFrame, nil
+	frame = skipWhiteSpaces(frame)
+	endStr := findNextAmong([]string{" ", "@", ","}, frame)
+	str, err := parseRawText(frame.until(endStr))
+	if err != nil {
+		return nil, Frame{}, err.extend(frame, "parsing string expression")
+	}
+	return str, skipWhiteSpaces(frame.from(endStr)), nil
 }
 
 type objParam struct {
@@ -1487,27 +1551,16 @@ func parseUpdate(frame Frame) (node, *ParserError) {
 	return &updateObjNode{path, attr, values, sharpe}, nil
 }
 
-func isCommandPrefix(prefix string) bool {
+func parseCommandKeyWord(frame Frame) (string, Frame) {
+	candidates := []string{}
 	for command := range commandDispatch {
-		if strings.HasPrefix(command, prefix) {
-			return true
-		}
+		candidates = append(candidates, command)
 	}
 	for command := range noArgsCommands {
-		if strings.HasPrefix(command, prefix) {
-			return true
-		}
+		candidates = append(candidates, command)
 	}
-	for _, command := range lsCommands {
-		if strings.HasPrefix(command, prefix) {
-			return true
-		}
-	}
-	return false
-}
-
-func parseCommandKeyWord(frame Frame) (string, Frame) {
-	return parseKeyWord(frame, isCommandPrefix)
+	candidates = append(candidates, lsCommands...)
+	return parseKeyWord(candidates, frame)
 }
 
 func parseCommand(frame Frame) (node, *ParserError) {
@@ -1571,6 +1624,7 @@ func Parse(buffer string) (node, *ParserError) {
 		">":          parseFocus,
 		"while":      parseWhile,
 		"for":        parseFor,
+		"if":         parseIf,
 	}
 	createObjDispatch = map[string]func(frame Frame) (node, *ParserError){
 		"tenant":   parseCreateTenant,
