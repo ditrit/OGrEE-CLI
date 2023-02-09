@@ -155,12 +155,18 @@ func TestParseAssign(t *testing.T) {
 	}
 }
 
-func TestParseLsObj(t *testing.T) {
-	buffer := "lsbldg -s height plouf.plaf - f attr1:attr2 -r"
+func testCommand(buffer string, expected node, t *testing.T) {
 	n, err := Parse(buffer)
 	if err != nil {
-		t.Errorf("cannot parse lsobj : %s", err.Error())
+		t.Errorf("cannot parse command : %s", err.Error())
 	}
+	if !reflect.DeepEqual(n, expected) {
+		t.Errorf("unexpected lsobj parsing : \n%s", spew.Sdump(n))
+	}
+}
+
+func TestParseLsObj(t *testing.T) {
+	buffer := "lsbldg -s height plouf.plaf - f attr1:attr2 -r"
 	path := &pathNode{&strLeaf{"plouf.plaf"}}
 	entity := 2
 	recursive := true
@@ -168,32 +174,23 @@ func TestParseLsObj(t *testing.T) {
 	attrList := []string{"attr1", "attr2"}
 	format := ""
 	expected := &lsObjNode{path, entity, recursive, sort, attrList, format}
-	if !reflect.DeepEqual(n, expected) {
-		t.Errorf("unexpected lsobj parsing : \n%s", spew.Sdump(n))
-	}
+	testCommand(buffer, expected, t)
+
 	buffer = "lsbldg -s height plouf.plaf - f (\"height is %s\", height) -r"
-	n, err = Parse(buffer)
-	if err != nil {
-		t.Errorf("cannot parse lsobj : %s", err.Error())
-	}
 	attrList = []string{"height"}
 	format = "height is %s"
 	expected = &lsObjNode{path, entity, recursive, sort, attrList, format}
-	if !reflect.DeepEqual(n, expected) {
-		t.Errorf("unexpected lsobj parsing : \n%s", spew.Sdump(n))
-	}
+	testCommand(buffer, expected, t)
 }
 
 func TestParseLs(t *testing.T) {
-	buffer := "ls"
-	n, err := Parse(buffer)
-	if err != nil {
-		t.Errorf("cannot parse ls : %s", err.Error())
-	}
-	expected := &lsNode{&pathNode{&strLeaf{"."}}}
-	if !reflect.DeepEqual(n, expected) {
-		t.Errorf("unexpected parsing : \n%s", spew.Sdump(n))
-	}
+	testCommand("ls", &lsNode{&pathNode{&strLeaf{"."}}}, t)
+}
+func TestParseGet(t *testing.T) {
+	testCommand("get toto.tata", &getObjectNode{&pathNode{&strLeaf{"toto.tata"}}}, t)
+}
+func TestPareGetU(t *testing.T) {
+	testCommand("getu rackA 42", &getUNode{&pathNode{&strLeaf{"rackA"}}, &intLeaf{42}}, t)
 }
 
 func TestParseUpdate(t *testing.T) {
