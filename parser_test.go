@@ -103,6 +103,16 @@ func TestParseArgs(t *testing.T) {
 		t.Errorf("wrong args returned : %v", args)
 		return
 	}
+	frame = newFrame(" -f toto.tata")
+	args, middle, err = parseArgs([]string{}, []string{"f"}, frame)
+	if err != nil {
+		t.Errorf(err.Error())
+		return
+	}
+	if !reflect.DeepEqual(args, map[string]string{"f": ""}) {
+		t.Errorf("wrong args returned : %v", args)
+		return
+	}
 }
 
 func TestParseExpr(t *testing.T) {
@@ -186,11 +196,27 @@ func TestParseLsObj(t *testing.T) {
 func TestParseLs(t *testing.T) {
 	testCommand("ls", &lsNode{&pathNode{&strLeaf{"."}}}, t)
 }
+
 func TestParseGet(t *testing.T) {
 	testCommand("get toto.tata", &getObjectNode{&pathNode{&strLeaf{"toto.tata"}}}, t)
 }
+
 func TestPareGetU(t *testing.T) {
 	testCommand("getu rackA 42", &getUNode{&pathNode{&strLeaf{"rackA"}}, &intLeaf{42}}, t)
+}
+
+func TestUndraw(t *testing.T) {
+	testCommand("undraw", &undrawNode{nil}, t)
+	testCommand("undraw toto.tata", &undrawNode{&pathNode{&strLeaf{"toto.tata"}}}, t)
+}
+
+func TestDraw(t *testing.T) {
+	testCommand("draw", &drawNode{&pathNode{&strLeaf{"."}}, 0, false}, t)
+	testCommand("draw toto.tata", &drawNode{&pathNode{&strLeaf{"toto.tata"}}, 0, false}, t)
+	testCommand("draw toto.tata 4", &drawNode{&pathNode{&strLeaf{"toto.tata"}}, 4, false}, t)
+	testCommand("draw -f", &drawNode{&pathNode{&strLeaf{"."}}, 0, true}, t)
+	testCommand("draw -f toto.tata", &drawNode{&pathNode{&strLeaf{"toto.tata"}}, 0, true}, t)
+	testCommand("draw toto.tata 4 -f", &drawNode{&pathNode{&strLeaf{"toto.tata"}}, 4, true}, t)
 }
 
 func TestParseUpdate(t *testing.T) {

@@ -684,6 +684,7 @@ func buildMultipleArgsRegex(allowedArgs []string, allowedFlags []string) string 
 func parseArgs(allowedArgs []string, allowedFlags []string, frame Frame) (
 	map[string]string, Frame, *ParserError,
 ) {
+	frame = skipWhiteSpaces(frame)
 	multipleArgsRegex := buildMultipleArgsRegex(allowedArgs, allowedFlags)
 	endArgsLeft := frame.end
 	for endArgsLeft > frame.start && !regexMatch(multipleArgsRegex, frame.until(endArgsLeft).str()) {
@@ -799,10 +800,11 @@ func parseUndraw(frame Frame) (node, *ParserError) {
 }
 
 func parseDraw(frame Frame) (node, *ParserError) {
-	args, frame, err := parseArgs([]string{"f"}, []string{}, frame)
+	args, frame, err := parseArgs([]string{}, []string{"f"}, frame)
 	if err != nil {
 		return nil, err.extendMessage("parsing draw arguments")
 	}
+	_, force := args["f"]
 	path, frame, err := parsePath(frame)
 	if err != nil {
 		return nil, err.extendMessage("parsing draw path")
@@ -814,7 +816,7 @@ func parseDraw(frame Frame) (node, *ParserError) {
 			return nil, err.extendMessage("parsing draw depth")
 		}
 	}
-	return &drawNode{path, depth, args}, nil
+	return &drawNode{path, depth, force}, nil
 }
 
 func parseDrawable(frame Frame) (node, *ParserError) {
@@ -1563,7 +1565,6 @@ func parseCommandKeyWord(frame Frame) (string, Frame) {
 func parseCommand(frame Frame) (node, *ParserError) {
 	startFrame := frame
 	commandKeyWord, frame := parseCommandKeyWord(skipWhiteSpaces(frame))
-	println(commandKeyWord)
 	if commandKeyWord == "" {
 		return parseUpdate(frame)
 	}
@@ -1572,7 +1573,7 @@ func parseCommand(frame Frame) (node, *ParserError) {
 	}
 	parseFunc, ok := commandDispatch[commandKeyWord]
 	if ok {
-		return parseFunc(frame)
+		return parseFunc(skipWhiteSpaces(frame))
 	}
 	result, ok := noArgsCommands[commandKeyWord]
 	if ok {
