@@ -38,14 +38,43 @@ const (
 	tokGtr        // '>'
 	tokLss        // '<'
 	tokOrientation
+	tokColor
 	tokText
 )
 
 func (s tokenType) String() string {
-	return [...]string{
-		"eof", "word", "deref", "int", "float", "bool", "string",
-		"leftParen", "rightParen", "not", "add", "sub", "mul", "div",
-		"mod", "or", "and", "eq", "neq", "leq", "geq", "gtr", "lss", "orientation"}[s]
+	return map[tokenType]string{
+		tokEOF:         "eof",
+		tokError:       "error",
+		tokWord:        "word",
+		tokDeref:       "deref",
+		tokInt:         "int",
+		tokFloat:       "float",
+		tokBool:        "bool",
+		tokString:      "string",
+		tokLeftBrac:    "leftBrac",
+		tokRightBrac:   "rightBrac",
+		tokComma:       "comma",
+		tokLeftParen:   "leftParen",
+		tokRightParen:  "rightParen",
+		tokNot:         "not",
+		tokAdd:         "add",
+		tokSub:         "sub",
+		tokMul:         "mul",
+		tokDiv:         "div",
+		tokMod:         "mod",
+		tokOr:          "or",
+		tokAnd:         "and",
+		tokEq:          "eq",
+		tokNeq:         "neq",
+		tokLeq:         "leq",
+		tokGeq:         "geq",
+		tokGtr:         "gtr",
+		tokLss:         "lss",
+		tokOrientation: "orientation",
+		tokColor:       "color",
+		tokText:        "text",
+	}[s]
 }
 
 type token struct {
@@ -111,9 +140,9 @@ func (l *lexer) errorf(format string, args ...interface{}) stateFn {
 		str:   val,
 		val:   val,
 	}
-	l.start = 0
-	l.pos = 0
-	l.input = l.input[:0]
+	//l.start = 0
+	//l.pos = 0
+	//l.input = l.input[:0]
 	return nil
 }
 
@@ -184,6 +213,8 @@ func lexExpr(l *lexer) stateFn {
 		return l.emit(tokLeftBrac, nil)
 	case ']':
 		return l.emit(tokRightBrac, nil)
+	case ',':
+		return l.emit(tokComma, nil)
 	case '(':
 		return l.emit(tokLeftParen, nil)
 	case ')':
@@ -279,6 +310,15 @@ func lexString(l *lexer) stateFn {
 	}
 }
 
+func (l *lexer) endNumber(t tokenType, val any) stateFn {
+	c := l.next()
+	l.backup()
+	if isLetter(c) {
+		return l.errorf("unrecognized token (number followed by a letter)")
+	}
+	return l.emit(t, val)
+}
+
 func lexNumber(l *lexer) stateFn {
 	digits := "0123456789_"
 	l.acceptRun(digits)
@@ -288,17 +328,17 @@ func lexNumber(l *lexer) stateFn {
 			l.backup()
 			l.backup()
 			val, _ := strconv.Atoi(l.input[l.start:l.pos])
-			return l.emit(tokInt, val)
+			return l.endNumber(tokInt, val)
 		}
 		isFloat = true
 		l.acceptRun(digits)
 	}
 	if isFloat {
 		val, _ := strconv.ParseFloat(l.input[l.start:l.pos], 64)
-		return l.emit(tokFloat, val)
+		return l.endNumber(tokFloat, val)
 	}
 	val, _ := strconv.Atoi(l.input[l.start:l.pos])
-	return l.emit(tokInt, val)
+	return l.endNumber(tokInt, val)
 }
 
 func lexAlphaNumeric(l *lexer) stateFn {
@@ -309,8 +349,11 @@ func lexAlphaNumeric(l *lexer) stateFn {
 		}
 		l.backup()
 		word := l.input[l.start:l.pos]
-		if word == "true" || word == "false" {
-			return l.emit(tokBool, nil)
+		if word == "true" {
+			return l.emit(tokBool, true)
+		}
+		if word == "false" {
+			return l.emit(tokBool, false)
 		}
 		return l.emit(tokWord, nil)
 	}
@@ -335,6 +378,15 @@ func lexOrientation(l *lexer) stateFn {
 		return l.errorf("invalid orientation")
 	}
 	return l.emit(tokOrientation, nil)
+}
+
+func lexColor(l *lexer) stateFn {
+	for i := 0; i < 6; i++ {
+		if !l.accept("0123456789ABCDEFabcdef") {
+			return l.errorf("invalid character in color")
+		}
+	}
+	return l.emit(tokColor, nil)
 }
 
 func lexFormattedString(l *lexer) stateFn {

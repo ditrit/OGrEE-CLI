@@ -169,9 +169,11 @@ func testCommand(buffer string, expected node, t *testing.T) {
 	n, err := Parse(buffer)
 	if err != nil {
 		t.Errorf("cannot parse command : %s", err.Error())
+		return
 	}
 	if !reflect.DeepEqual(n, expected) {
-		t.Errorf("unexpected lsobj parsing : \n%s", spew.Sdump(n))
+		t.Errorf("unexpected parsing : \ncommand : %s\n\ntree : %s\nexpected : %s",
+			buffer, spew.Sdump(n), spew.Sdump(expected))
 	}
 }
 
@@ -193,18 +195,78 @@ func TestParseLsObj(t *testing.T) {
 	testCommand(buffer, expected, t)
 }
 
+var testPath = &pathNode{&strLeaf{"toto/tata"}}
+var testPath2 = &pathNode{&strLeaf{"/toto/../tata"}}
+
+func vec2(x float64, y float64) node {
+	return &arrNode{[]node{&floatLeaf{x}, &floatLeaf{y}}}
+}
+
+func vec3(x float64, y float64, z float64) node {
+	return &arrNode{[]node{&floatLeaf{x}, &floatLeaf{y}, &floatLeaf{z}}}
+}
+
+func vec4(x float64, y float64, z float64, w float64) node {
+	return &arrNode{[]node{&floatLeaf{x}, &floatLeaf{y}, &floatLeaf{z}, &floatLeaf{w}}}
+}
+
 var commandsMatching = map[string]node{
-	"ls":                  &lsNode{&pathNode{&strLeaf{"."}}},
-	"get toto.tata":       &getObjectNode{&pathNode{&strLeaf{"toto.tata"}}},
-	"getu rackA 42":       &getUNode{&pathNode{&strLeaf{"rackA"}}, &intLeaf{42}},
-	"undraw":              &undrawNode{nil},
-	"undraw toto.tata":    &undrawNode{&pathNode{&strLeaf{"toto.tata"}}},
-	"draw":                &drawNode{&pathNode{&strLeaf{"."}}, 0, false},
-	"draw toto.tata":      &drawNode{&pathNode{&strLeaf{"toto.tata"}}, 0, false},
-	"draw toto.tata 4":    &drawNode{&pathNode{&strLeaf{"toto.tata"}}, 4, false},
-	"draw -f":             &drawNode{&pathNode{&strLeaf{"."}}, 0, true},
-	"draw -f toto.tata":   &drawNode{&pathNode{&strLeaf{"toto.tata"}}, 0, true},
-	"draw toto.tata 4 -f": &drawNode{&pathNode{&strLeaf{"toto.tata"}}, 4, true},
+	"ls":                          &lsNode{&pathNode{&strLeaf{"."}}},
+	"get toto/tata":               &getObjectNode{testPath},
+	"getu rackA 42":               &getUNode{&pathNode{&strLeaf{"rackA"}}, &intLeaf{42}},
+	"undraw":                      &undrawNode{nil},
+	"undraw toto/tata":            &undrawNode{testPath},
+	"draw":                        &drawNode{&pathNode{&strLeaf{"."}}, 0, false},
+	"draw toto/tata":              &drawNode{testPath, 0, false},
+	"draw toto/tata 4":            &drawNode{testPath, 4, false},
+	"draw -f":                     &drawNode{&pathNode{&strLeaf{"."}}, 0, true},
+	"draw -f toto/tata":           &drawNode{testPath, 0, true},
+	"draw toto/tata 4 -f":         &drawNode{testPath, 4, true},
+	".cmds:../toto/tata.ocli":     &loadNode{&strLeaf{"../toto/tata.ocli"}},
+	".template:../toto/tata.ocli": &loadTemplateNode{&strLeaf{"../toto/tata.ocli"}},
+	".var:a=42":                   &assignNode{"a", &intLeaf{42}},
+	"=toto/tata":                  &selectObjectNode{testPath},
+	"=..":                         &selectObjectNode{&pathNode{&strLeaf{".."}}},
+	"={toto/tata}":                &selectChildrenNode{[]node{testPath}},
+	"={toto/tata, /toto/../tata}": &selectChildrenNode{[]node{testPath, testPath2}},
+	"-toto/tata":                  &deleteObjNode{testPath},
+	">toto/tata":                  &focusNode{testPath},
+	"+tenant:toto/tata@42ff42":    &createTenantNode{testPath, &strLeaf{"42ff42"}},
+	"+tn:toto/tata@42ff42":        &createTenantNode{testPath, &strLeaf{"42ff42"}},
+	"+site:toto/tata@NE":          &createSiteNode{testPath, &strLeaf{"NE"}},
+	"+si:toto/tata@NW":            &createSiteNode{testPath, &strLeaf{"NW"}},
+	"+building:toto/tata@[1., 2.]@3.@[.1, 2., 3.]":      &createBuildingNode{testPath, vec2(1., 2.), &floatLeaf{3.}, vec3(.1, 2., 3.)},
+	"+room:toto/tata@[1., 2.]@3.@[.1, 2., 3.]@+x-y":     &createRoomNode{testPath, vec2(1., 2.), &floatLeaf{3.}, vec3(.1, 2., 3.), &strLeaf{"+x-y"}, nil, nil},
+	"+room:toto/tata@[1., 2.]@3.@[.1, 2., 3.]@+x-y@m":   &createRoomNode{testPath, vec2(1., 2.), &floatLeaf{3.}, vec3(.1, 2., 3.), &strLeaf{"+x-y"}, &strLeaf{"m"}, nil},
+	"+room:toto/tata@[1., 2.]@3.@template":              &createRoomNode{testPath, vec2(1., 2.), &floatLeaf{3.}, nil, nil, nil, &strLeaf{"template"}},
+	"+rack:toto/tata@[1., 2.]@[.1, 2., 3.]@front":       &createRackNode{testPath, vec2(1., 2.), vec3(.1, 2., 3.), &strLeaf{"front"}},
+	"+rack:toto/tata@[1., 2.]@template@front":           &createRackNode{testPath, vec2(1., 2.), &strLeaf{"template"}, &strLeaf{"front"}},
+	"+device:toto/tata@42@42":                           &createDeviceNode{testPath, &intLeaf{42}, &intLeaf{42}, nil},
+	"+device:toto/tata@42@template":                     &createDeviceNode{testPath, &intLeaf{42}, &strLeaf{"template"}, nil},
+	"+device:toto/tata@42@template@frontflipped ":       &createDeviceNode{testPath, &intLeaf{42}, &strLeaf{"template"}, &strLeaf{"frontflipped"}},
+	"+group:toto/tata@{c1, c2}":                         &createGroupNode{testPath, []node{&pathNode{&strLeaf{"c1"}}, &pathNode{&strLeaf{"c2"}}}},
+	"+corridor:toto/tata@{r1, r2}@42.7":                 &createCorridorNode{testPath, &pathNode{&strLeaf{"r1"}}, &pathNode{&strLeaf{"r2"}}, &floatLeaf{42.7}},
+	"toto/tata:areas=[1., 2., 3., 4.]@[1., 2., 3., 4.]": &updateObjNode{testPath, "areas", []node{vec4(1., 2., 3., 4.), vec4(1., 2., 3., 4.)}, false},
+	"toto/tata:separator=[1., 2.]@[1., 2.]@wireframe":   &updateObjNode{testPath, "separator", []node{vec2(1., 2.), vec2(1., 2.), &strLeaf{"wireframe"}}, false},
+	"toto/tata:attr=42":                                 &updateObjNode{testPath, "attr", []node{&intLeaf{42}}, false},
+	"toto/tata:label=\"plouf\"":                         &updateObjNode{testPath, "label", []node{&strLeaf{"plouf"}}, false},
+	"toto/tata:labelFont=bold":                          &updateObjNode{testPath, "labelFont", []node{&strLeaf{"bold"}}, false},
+	"toto/tata:labelFont=color@42ff42":                  &updateObjNode{testPath, "labelFont", []node{&strLeaf{"color"}, &strLeaf{"42ff42"}}, false},
+	"toto/tata:tilesName=true":                          &updateObjNode{testPath, "tilesName", []node{&boolLeaf{true}}, false},
+	"toto/tata:tilesColor=false":                        &updateObjNode{testPath, "tilesColor", []node{&boolLeaf{false}}, false},
+	"toto/tata:U=false":                                 &updateObjNode{testPath, "U", []node{&boolLeaf{false}}, false},
+	"toto/tata:slots=false":                             &updateObjNode{testPath, "slots", []node{&boolLeaf{false}}, false},
+	"toto/tata:localCS=false":                           &updateObjNode{testPath, "localCS", []node{&boolLeaf{false}}, false},
+	"toto/tata:content=false":                           &updateObjNode{testPath, "content", []node{&boolLeaf{false}}, false},
+	"ui.delay=15":                                       &uiDelayNode{15.},
+	"ui.infos=true":                                     &uiToggleNode{"infos", true},
+	"ui.debug=false":                                    &uiToggleNode{"debug", false},
+	"ui.highlight=toto/tata":                            &uiHighlightNode{testPath},
+	"ui.hl=toto/tata":                                   &uiHighlightNode{testPath},
+	"camera.move=[1., 2., 3.]@[1., 2.]":                 &cameraMoveNode{"move", vec3(1., 2., 3.), vec2(1., 2.)},
+	"camera.translate=[1., 2., 3.]@[1., 2.]":            &cameraMoveNode{"translate", vec3(1., 2., 3.), vec2(1., 2.)},
+	"camera.wait=15":                                    &cameraWaitNode{15.},
+	"clear":                                             &clrNode{},
 }
 
 func TestSimpleCommands(t *testing.T) {
@@ -222,4 +284,14 @@ func TestParseUpdate(t *testing.T) {
 		true,
 	}
 	testCommand(buffer, expected, t)
+}
+
+func TestSequence(t *testing.T) {
+	for command1, tree1 := range commandsMatching {
+		for command2, tree2 := range commandsMatching {
+			seq := command1 + "; " + command2
+			expected := &ast{[]node{tree1, tree2}}
+			testCommand(seq, expected, t)
+		}
+	}
 }

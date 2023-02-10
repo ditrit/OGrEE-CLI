@@ -998,6 +998,7 @@ func (n *createBuildingNode) execute() (interface{}, error) {
 type createRoomNode struct {
 	path        node
 	posXY       node
+	rotation    node
 	size        node
 	orientation node
 	floorUnit   node
@@ -1021,6 +1022,14 @@ func (n *createRoomNode) execute() (interface{}, error) {
 	if !ok || len(posXY) != 2 {
 		return nil, fmt.Errorf("posXY should be a vector2")
 	}
+	rotationAny, err := n.rotation.execute()
+	if err != nil {
+		return nil, err
+	}
+	rotation, err := getFloat(rotationAny)
+	if err != nil {
+		return nil, fmt.Errorf("rotation should be a number")
+	}
 	templateAny, err := n.template.execute()
 	if err != nil {
 		return nil, err
@@ -1041,7 +1050,7 @@ func (n *createRoomNode) execute() (interface{}, error) {
 	if !ok {
 		return nil, fmt.Errorf("orientation should be a string")
 	}
-	attributes := map[string]any{"posXY": posXY, "size": size, "orientation": orientation}
+	attributes := map[string]any{"posXY": posXY, "rotation": rotation, "size": size, "orientation": orientation}
 	if n.floorUnit != nil {
 		floorUnitAny, err := n.floorUnit.execute()
 		if err != nil {
