@@ -482,6 +482,43 @@ func setRoomAreas(path string, values []any) (map[string]any, error) {
 	return cmd.UpdateObj(path, "", "", attributes, false)
 }
 
+func setLabel(path string, values []any, hasSharpe bool) (map[string]any, error) {
+	if len(values) != 1 {
+		return nil, fmt.Errorf("only 1 value expected")
+	}
+	value, ok := values[0].(string)
+	if !ok {
+		return nil, fmt.Errorf("value should be a string")
+	}
+	return nil, cmd.InteractObject(path, "label", value, hasSharpe)
+}
+
+func setLabelFont(path string, values []any) (map[string]any, error) {
+	msg := "The font can only be bold or italic" +
+		" or be in the form of color@[colorValue]." +
+		"\n\nFor more information please refer to: " +
+		"\nhttps://github.com/ditrit/OGrEE-3D/wiki/CLI-langage#interact-with-objects"
+
+	switch len(values) {
+	case 1:
+		if values[0] != "bold" && values[0] != "italic" {
+			return nil, fmt.Errorf(msg)
+		}
+		return nil, cmd.InteractObject(path, "labelFont", values[0], false)
+	case 2:
+		if values[0] != "color" {
+			return nil, fmt.Errorf(msg)
+		}
+		c, ok := AssertColor(values[1])
+		if !ok {
+			return nil, fmt.Errorf("please provide a valid 6 length hex value for the color")
+		}
+		return nil, cmd.InteractObject(path, "labelFont", "color@"+c, false)
+	default:
+		return nil, fmt.Errorf(msg)
+	}
+}
+
 func addRoomSeparator(path string, values []any) (map[string]any, error) {
 	if len(values) != 3 {
 		return nil, fmt.Errorf("3 values (startPos, endPos, type) expected to add a separator")
@@ -530,41 +567,50 @@ func addRoomSeparator(path string, values []any) (map[string]any, error) {
 	return cmd.UpdateObj(path, "", "", attr, false)
 }
 
-func setLabel(path string, values []any, hasSharpe bool) (map[string]any, error) {
-	if len(values) != 1 {
-		return nil, fmt.Errorf("only 1 value expected")
+func addRoomPillar(path string, values []any) (map[string]any, error) {
+	centerXY, ok := values[0].([]float64)
+	if !ok || len(centerXY) != 2 {
+		return nil, fmt.Errorf("centerXY should be a vector2")
 	}
-	value, ok := values[0].(string)
-	if !ok {
-		return nil, fmt.Errorf("value should be a string")
+	sizeXY, ok := values[1].([]float64)
+	if !ok || len(sizeXY) != 2 {
+		return nil, fmt.Errorf("sizeXY should be a vector2")
 	}
-	return nil, cmd.InteractObject(path, "label", value, hasSharpe)
-}
+	rotation, err := getFloat(values[2])
+	if err != nil {
+		return nil, fmt.Errorf("rotation should be a number")
+	}
+	obj, _ := cmd.GetObject(path, true)
+	if obj == nil {
+		return nil, fmt.Errorf("cannot find object")
+	}
+	var pillarArray []any
+	attr := obj["attributes"].(map[string]any)
+	pillars := attr["pillars"]
 
-func setLabelFont(path string, values []any) (map[string]any, error) {
-	msg := "The font can only be bold or italic" +
-		" or be in the form of color@[colorValue]." +
-		"\n\nFor more information please refer to: " +
-		"\nhttps://github.com/ditrit/OGrEE-3D/wiki/CLI-langage#interact-with-objects"
+	if IsInfArr(pillars) {
+		pillarArray = pillars.([]any)
+		pillarArray = append(pillarArray, map[string]any{
+			"centerXY": centerXY, "sizeXY": sizeXY, "rotation": rotation})
 
-	switch len(values) {
-	case 1:
-		if values[0] != "bold" && values[0] != "italic" {
-			return nil, fmt.Errorf(msg)
+		pillarArrStr, _ := json.Marshal(&pillarArray)
+		attr["pillars"] = string(pillarArrStr)
+	} else {
+		var pillStr string
+		nextPill := map[string]any{
+			"centerXY": centerXY, "sizeXY": sizeXY, "rotation": rotation}
+
+		nextPillStr, _ := json.Marshal(nextPill)
+		if IsString(pillars) && pillars != "" && pillars != "[]" {
+			pillStr = pillars.(string)
+			size := len(pillStr)
+			pillStr = pillStr[:size-1] + "," + string(nextPillStr) + "]"
+		} else {
+			pillStr = "[" + string(nextPillStr) + "]"
 		}
-		return nil, cmd.InteractObject(path, "labelFont", values[0], false)
-	case 2:
-		if values[0] != "color" {
-			return nil, fmt.Errorf(msg)
-		}
-		c, ok := AssertColor(values[1])
-		if !ok {
-			return nil, fmt.Errorf("please provide a valid 6 length hex value for the color")
-		}
-		return nil, cmd.InteractObject(path, "labelFont", "color@"+c, false)
-	default:
-		return nil, fmt.Errorf(msg)
+		attr["pillars"] = pillStr
 	}
+	return attr, nil
 }
 
 type updateObjNode struct {
@@ -587,32 +633,32 @@ func (n *updateObjNode) execute() (interface{}, error) {
 		}
 		values = append(values, val)
 	}
-	value := values[0]
-	attrMap := map[string]any{n.attr: value}
 	if path == "_" {
 		if len(values) != 1 {
 			return nil, fmt.Errorf("only one value is expected when updating selection")
 		}
-		return nil, cmd.UpdateSelection(attrMap)
+		return nil, cmd.UpdateSelection(map[string]any{n.attr: values[0]})
+	}
+	boolInteractVals := []string{"content", "alpha", "tilesName", "tilesColor", "U", "slots", "localCS"}
+	if AssertInStringValues(n.attr, boolInteractVals) {
+		if !IsBool(values[0]) {
+			return nil, fmt.Errorf("boolean value expected")
+		}
+		return nil, cmd.InteractObject(path, n.attr, values[0], n.hasSharpe)
 	}
 	switch n.attr {
+	case "areas":
+		return setRoomAreas(path, values)
 	case "label":
 		return setLabel(path, values, n.hasSharpe)
 	case "labelFont":
 		return setLabelFont(path, values)
 	case "separator":
 		return addRoomSeparator(path, values)
-	case "areas":
-		return setRoomAreas(path, values)
+	case "pillar":
+		return addRoomPillar(path, values)
 	}
-	boolInteractVals := []string{"content", "alpha", "tilesName", "tilesColor", "U", "slots", "localCS"}
-	if AssertInStringValues(n.attr, boolInteractVals) {
-		if !IsBool(value) {
-			return nil, fmt.Errorf("boolean value expected")
-		}
-		return nil, cmd.InteractObject(path, n.attr, value, n.hasSharpe)
-	}
-	return cmd.UpdateObj(path, "", "", attrMap, false)
+	return cmd.UpdateObj(path, "", "", map[string]any{n.attr: values[0]}, false)
 }
 
 type lsObjNode struct {
