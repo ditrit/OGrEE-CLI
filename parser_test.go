@@ -85,18 +85,14 @@ func TestParseWordSingleLetter(t *testing.T) {
 }
 
 func TestParseArgs(t *testing.T) {
-	frame := newFrame("-a 42 -v coucou.plouf -f -s dazd")
-	args, middle, err := parseArgs([]string{"a", "s"}, []string{"v", "f"}, frame)
+	frame := newFrame("-a 42 -v -f -s dazd coucou.plouf")
+	args, frame, err := parseArgs([]string{"a", "s"}, []string{"v", "f"}, frame)
 	if err != nil {
 		t.Errorf(err.Error())
 		return
 	}
-	if middle.start != 9 {
-		t.Errorf("wrong end position for left arguments : %d", middle.start)
-		return
-	}
-	if middle.end != 22 {
-		t.Errorf("wrong start position for right arguments : %d", middle.end)
+	if frame.start != 20 {
+		t.Errorf("wrong end position for left arguments : %d", frame.start)
 		return
 	}
 	if !reflect.DeepEqual(args, map[string]string{"a": "42", "s": "dazd", "v": "", "f": ""}) {
@@ -104,7 +100,7 @@ func TestParseArgs(t *testing.T) {
 		return
 	}
 	frame = newFrame(" -f toto.tata")
-	args, middle, err = parseArgs([]string{}, []string{"f"}, frame)
+	args, frame, err = parseArgs([]string{}, []string{"f"}, frame)
 	if err != nil {
 		t.Errorf(err.Error())
 		return
@@ -151,6 +147,24 @@ func TestParseExpr2(t *testing.T) {
 	}
 }
 
+func TestParseRawText(t *testing.T) {
+	frame := newFrame("${a}a")
+	expr, _ := parseRawText(frame)
+	expected := &formatStringNode{"%va", []symbolReferenceNode{{"a"}}}
+	if !reflect.DeepEqual(expr, expected) {
+		t.Errorf("unexpected expression : \n%s", spew.Sdump(expr))
+	}
+}
+
+func TestParseStringExpr(t *testing.T) {
+	frame := newFrame("${a}a")
+	expr, _, _ := parseStringExpr(frame)
+	expected := &formatStringNode{"%va", []symbolReferenceNode{{"a"}}}
+	if !reflect.DeepEqual(expr, expected) {
+		t.Errorf("unexpected expression : \n%s", spew.Sdump(expr))
+	}
+}
+
 func TestParseAssign(t *testing.T) {
 	frame := newFrame("test= plouf")
 	va, nextFrame, err := parseAssign(frame)
@@ -178,7 +192,7 @@ func testCommand(buffer string, expected node, t *testing.T) {
 }
 
 func TestParseLsObj(t *testing.T) {
-	buffer := "lsbldg -s height plouf.plaf - f attr1:attr2 -r"
+	buffer := "lsbldg -s height - f attr1:attr2 -r plouf.plaf "
 	path := &pathNode{&strLeaf{"plouf.plaf"}}
 	entity := 2
 	recursive := true
@@ -188,7 +202,7 @@ func TestParseLsObj(t *testing.T) {
 	expected := &lsObjNode{path, entity, recursive, sort, attrList, format}
 	testCommand(buffer, expected, t)
 
-	buffer = "lsbldg -s height plouf.plaf - f (\"height is %s\", height) -r"
+	buffer = "lsbldg -s height - f (\"height is %s\", height) -r plouf.plaf "
 	attrList = []string{"height"}
 	format = "height is %s"
 	expected = &lsObjNode{path, entity, recursive, sort, attrList, format}
@@ -221,7 +235,7 @@ var commandsMatching = map[string]node{
 	"draw toto/tata 4":            &drawNode{testPath, 4, false},
 	"draw -f":                     &drawNode{&pathNode{&strLeaf{"."}}, 0, true},
 	"draw -f toto/tata":           &drawNode{testPath, 0, true},
-	"draw toto/tata 4 -f":         &drawNode{testPath, 4, true},
+	"draw -f toto/tata 4 ":        &drawNode{testPath, 4, true},
 	".cmds:../toto/tata.ocli":     &loadNode{&strLeaf{"../toto/tata.ocli"}},
 	".template:../toto/tata.ocli": &loadTemplateNode{&strLeaf{"../toto/tata.ocli"}},
 	".var:a=42":                   &assignNode{"a", &intLeaf{42}},
@@ -233,8 +247,8 @@ var commandsMatching = map[string]node{
 	">toto/tata":                  &focusNode{testPath},
 	"+tenant:toto/tata@42ff42":    &createTenantNode{testPath, &strLeaf{"42ff42"}},
 	"+tn:toto/tata@42ff42":        &createTenantNode{testPath, &strLeaf{"42ff42"}},
-	"+site:toto/tata@NE":          &createSiteNode{testPath, &strLeaf{"NE"}},
-	"+si:toto/tata@NW":            &createSiteNode{testPath, &strLeaf{"NW"}},
+	"+site:toto/tata":             &createSiteNode{testPath},
+	"+si:toto/tata":               &createSiteNode{testPath},
 	"+building:toto/tata@[1., 2.]@3.@[.1, 2., 3.]":      &createBuildingNode{testPath, vec2(1., 2.), &floatLeaf{3.}, vec3(.1, 2., 3.)},
 	"+room:toto/tata@[1., 2.]@3.@[.1, 2., 3.]@+x-y":     &createRoomNode{testPath, vec2(1., 2.), &floatLeaf{3.}, vec3(.1, 2., 3.), &strLeaf{"+x-y"}, nil, nil},
 	"+room:toto/tata@[1., 2.]@3.@[.1, 2., 3.]@+x-y@m":   &createRoomNode{testPath, vec2(1., 2.), &floatLeaf{3.}, vec3(.1, 2., 3.), &strLeaf{"+x-y"}, &strLeaf{"m"}, nil},
@@ -267,6 +281,7 @@ var commandsMatching = map[string]node{
 	"camera.translate=[1., 2., 3.]@[1., 2.]":            &cameraMoveNode{"translate", vec3(1., 2., 3.), vec2(1., 2.)},
 	"camera.wait=15":                                    &cameraWaitNode{15.},
 	"clear":                                             &clrNode{},
+	".cmds:${CUST}/DEMO.PERF.ocli":                      &loadNode{&formatStringNode{"%v/DEMO.PERF.ocli", []symbolReferenceNode{{"CUST"}}}},
 }
 
 func TestSimpleCommands(t *testing.T) {

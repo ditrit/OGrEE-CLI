@@ -231,15 +231,9 @@ func findClosing(frame Frame) int {
 	return frame.end
 }
 
-func splitFrameOn(sep string, frame Frame) []Frame {
-	frames := []Frame{}
-	cursor := frame.start
-	for cursor < frame.end {
-		next := findNext(sep, frame.from(cursor))
-		frames = append(frames, frame.new(cursor, next))
-		cursor = next + 1
-	}
-	return frames
+func frameEnd(frame Frame) bool {
+	frame = skipWhiteSpaces(frame)
+	return frame.start == frame.end || frame.first() == ';'
 }
 
 func parseExact(word string, frame Frame) (bool, Frame) {
@@ -264,7 +258,7 @@ func parseKeyWord(candidates []string, frame Frame) (string, Frame) {
 		commandEnd++
 	}
 	if commandEnd == frame.start {
-		return "", Frame{}
+		return "", frame
 	}
 	return frame.until(commandEnd).str(), frame.from(commandEnd)
 }
@@ -273,7 +267,7 @@ func parseWord(frame Frame) (string, Frame, *ParserError) {
 	l := lexerFromFrame(frame)
 	tok := l.nextToken(lexExpr)
 	if tok.t != tokWord {
-		return "", Frame{}, newParserError(frame.empty(), "word expected")
+		return "", frame, newParserError(frame.empty(), "word expected")
 	}
 	return tok.str, frame.from(tok.end), nil
 }
@@ -295,7 +289,7 @@ func parseSeparatedStuff(
 		}
 		items = append(items, item)
 		frame = skipWhiteSpaces(frame)
-		if frame.start == frame.end {
+		if frameEnd(frame) {
 			return items, nil
 		}
 		if frame.first() != sep {
@@ -418,28 +412,28 @@ loop:
 
 func parsePath(frame Frame) (node, Frame, *ParserError) {
 	frame = skipWhiteSpaces(frame)
-	endPath := findNextAmong([]string{" ", "@", ",", ":"}, frame)
+	endPath := findNextAmong([]string{" ", "@", ",", ":", ";"}, frame)
 	if frame.start == endPath {
 		return &pathNode{&strLeaf{"."}}, frame, nil
 	}
 	path, err := parseRawText(frame.until(endPath))
 	if err != nil {
-		return nil, Frame{}, err.extend(frame, "parsing path")
+		return nil, frame, err.extend(frame, "parsing path")
 	}
 	return &pathNode{path}, skipWhiteSpaces(frame.from(endPath)), nil
 }
 
 func parsePathGroup(frame Frame) ([]node, Frame, *ParserError) {
 	if frame.first() != '{' {
-		return nil, Frame{}, newParserError(frame, "{ expected")
+		return nil, frame, newParserError(frame, "{ expected")
 	}
 	endBracket := findClosing(frame)
 	if endBracket == frame.end {
-		return nil, Frame{}, newParserError(frame, "{ opened but never closed")
+		return nil, frame, newParserError(frame, "{ opened but never closed")
 	}
 	paths, err := parseSeparatedPaths(',', frame.new(frame.start+1, endBracket))
 	if err != nil {
-		return nil, Frame{}, err.extendMessage("parsing path group")
+		return nil, frame, err.extendMessage("parsing path group")
 	}
 	return paths, frame.from(endBracket + 1), nil
 }
@@ -579,15 +573,15 @@ func parseExpr(frame Frame) (node, Frame, *ParserError) {
 func parseAssign(frame Frame) (string, Frame, *ParserError) {
 	eqIdx := findNext("=", frame)
 	if eqIdx == frame.end {
-		return "", Frame{}, newParserError(frame, "= expected")
+		return "", frame, newParserError(frame, "= expected")
 	}
 	varName, frame, err := parseWord(frame)
 	if err != nil {
-		return "", Frame{}, err.extendMessage("parsing word on the left of =")
+		return "", frame, err.extendMessage("parsing word on the left of =")
 	}
 	frame = skipWhiteSpaces(frame)
 	if frame.first() != '=' {
-		return "", Frame{}, newParserError(skipWhiteSpaces(frame).empty(), "= expected")
+		return "", frame, newParserError(skipWhiteSpaces(frame).empty(), "= expected")
 	}
 	return varName, frame.forward(1), nil
 }
@@ -613,7 +607,7 @@ func parseArgValue(frame Frame) (string, Frame, *ParserError) {
 	if frame.first() == '(' {
 		close := findClosing(frame)
 		if close == frame.end {
-			return "", Frame{}, newParserError(frame, "( opened but never closed")
+			return "", frame, newParserError(frame, "( opened but never closed")
 		}
 		return frame.until(close + 1).str(), frame.from(close + 1), nil
 	} else if frame.first() == '"' {
@@ -631,7 +625,7 @@ func parseSingleArg(allowedArgs []string, allowedFlags []string, frame Frame) (
 	frame = skipWhiteSpaces(frame.forward(1))
 	arg, frame, err := parseWord(frame)
 	if err != nil {
-		return "", "", Frame{}, err.extendMessage("parsing arg name").
+		return "", "", frame, err.extendMessage("parsing arg name").
 			extend(topFrame.empty(), "parsing argument")
 	}
 	frame = skipWhiteSpaces(frame)
@@ -639,7 +633,7 @@ func parseSingleArg(allowedArgs []string, allowedFlags []string, frame Frame) (
 	if sliceContains(allowedArgs, arg) {
 		value, frame, err = parseArgValue(frame)
 		if err != nil {
-			return "", "", Frame{}, err.extendMessage("pasing arg value").
+			return "", "", frame, err.extendMessage("pasing arg value").
 				extend(topFrame, "parsing argument")
 		}
 	} else if sliceContains(allowedFlags, arg) {
@@ -650,57 +644,20 @@ func parseSingleArg(allowedArgs []string, allowedFlags []string, frame Frame) (
 	return arg, value, skipWhiteSpaces(frame), nil
 }
 
-func parseArgsNoCommand(allowedArgs []string, allowedFlags []string, frame Frame) (
-	map[string]string, *ParserError,
+func parseArgs(allowedArgs []string, allowedFlags []string, frame Frame) (
+	map[string]string, Frame, *ParserError,
 ) {
 	args := map[string]string{}
+	frame = skipWhiteSpaces(frame)
 	for frame.start < frame.end && frame.first() == '-' {
 		arg, value, newFrame, err := parseSingleArg(allowedArgs, allowedFlags, frame)
 		if err != nil {
-			return nil, err
+			return nil, frame, err
 		}
 		args[arg] = value
 		frame = newFrame
 	}
-	return args, nil
-}
-
-func buildSingleArgRegex(allowedArgs []string) string {
-	argNameRegex := strings.Join(allowedArgs, "|")
-	return `([\-]\s*(` + argNameRegex + `)\s+` + valueRegex + `\s*)`
-}
-
-func buildSingleFlagRegex(allowedFlags []string) string {
-	flagNameRegex := strings.Join(allowedFlags, "|")
-	return `([\-]\s*(` + flagNameRegex + `)\s*)`
-}
-
-func buildMultipleArgsRegex(allowedArgs []string, allowedFlags []string) string {
-	singleArgRegex := buildSingleArgRegex(allowedArgs)
-	singleFlagRegex := buildSingleFlagRegex(allowedFlags)
-	return "((" + singleArgRegex + ")|(" + singleFlagRegex + "))*"
-}
-
-func parseArgs(allowedArgs []string, allowedFlags []string, frame Frame) (
-	map[string]string, Frame, *ParserError,
-) {
-	frame = skipWhiteSpaces(frame)
-	multipleArgsRegex := buildMultipleArgsRegex(allowedArgs, allowedFlags)
-	endArgsLeft := frame.end
-	for endArgsLeft > frame.start && !regexMatch(multipleArgsRegex, frame.until(endArgsLeft).str()) {
-		endArgsLeft--
-	}
-	startArgsRight := endArgsLeft
-	for startArgsRight < frame.end && !regexMatch(multipleArgsRegex, frame.from(startArgsRight).str()) {
-		startArgsRight++
-	}
-	argsBuffer := frame.until(endArgsLeft).str() + frame.from(startArgsRight).str()
-	argsFrame := newFrame(argsBuffer)
-	args, err := parseArgsNoCommand(allowedArgs, allowedFlags, argsFrame)
-	if err != nil {
-		return nil, Frame{}, err.extend(frame, "parsing args")
-	}
-	return args, frame.new(endArgsLeft, startArgsRight), nil
+	return args, frame, nil
 }
 
 func parseLsObj(lsIdx int, frame Frame) (node, Frame, *ParserError) {
@@ -789,7 +746,7 @@ func parseGetSlot(frame Frame) (node, Frame, *ParserError) {
 }
 
 func parseUndraw(frame Frame) (node, Frame, *ParserError) {
-	if frame.start == frame.end {
+	if frameEnd(frame) {
 		return &undrawNode{nil}, frame, nil
 	}
 	path, frame, err := parsePath(frame)
@@ -810,7 +767,7 @@ func parseDraw(frame Frame) (node, Frame, *ParserError) {
 		return nil, frame, err.extendMessage("parsing draw path")
 	}
 	depth := 0
-	if frame.start < frame.end {
+	if !frameEnd(frame) {
 		depth, frame, err = parseInt(frame)
 		if err != nil {
 			return nil, frame, err.extendMessage("parsing draw depth")
@@ -824,7 +781,7 @@ func parseDrawable(frame Frame) (node, Frame, *ParserError) {
 	if err != nil {
 		return nil, frame, err.extendMessage("parsing drawable path")
 	}
-	if frame.start == frame.end {
+	if frameEnd(frame) {
 		return &isEntityDrawableNode{path}, frame, nil
 	}
 	attrName, _, err := parseWord(frame)
@@ -839,10 +796,10 @@ func parseHc(frame Frame) (node, Frame, *ParserError) {
 	if err != nil {
 		return nil, frame, err.extendMessage("parsing hc path")
 	}
-	if frame.start == frame.end {
+	if frameEnd(frame) {
 		return &hierarchyNode{path, 1}, frame, nil
 	}
-	depth, _, err := parseInt(frame)
+	depth, frame, err := parseInt(frame)
 	if err != nil {
 		return nil, frame, err.extendMessage("parsing hc depth")
 	}
@@ -855,7 +812,7 @@ func parseUnset(frame Frame) (node, Frame, *ParserError) {
 		return nil, frame, err.extendMessage("parsing unset arguments")
 	}
 	if len(args) == 0 {
-		path, _, err := parsePath(frame)
+		path, frame, err := parsePath(frame)
 		if err != nil {
 			return nil, frame, err.extendMessage("parsing unset path")
 		}
@@ -867,7 +824,7 @@ func parseUnset(frame Frame) (node, Frame, *ParserError) {
 		if err != nil {
 			return nil, frame, err.extend(frame, "parsing attribute name")
 		}
-		index, _, _ := parseIndexing(frame)
+		index, frame, _ := parseIndexing(frame)
 		return &unsetAttrNode{path, attr, index}, frame, nil
 	}
 	if funcName, ok := args["f"]; ok {
@@ -884,7 +841,7 @@ func parseEnv(frame Frame) (node, Frame, *ParserError) {
 	if err != nil {
 		return nil, frame, err
 	}
-	value, _, err := parseStringExpr(valueFrame)
+	value, frame, err := parseStringExpr(valueFrame)
 	if err != nil {
 		return nil, frame, err.extendMessage("parsing env variable value")
 	}
@@ -892,11 +849,11 @@ func parseEnv(frame Frame) (node, Frame, *ParserError) {
 }
 
 func parseDelete(frame Frame) (node, Frame, *ParserError) {
-	deleteSelection, _ := parseExact("selection", frame)
+	deleteSelection, frame := parseExact("selection", frame)
 	if deleteSelection {
 		return &deleteSelectionNode{}, frame, nil
 	}
-	path, _, err := parsePath(frame)
+	path, frame, err := parsePath(frame)
 	if err != nil {
 		return nil, frame, err.extendMessage("parsing deletion path")
 	}
@@ -984,7 +941,7 @@ func parseLink(frame Frame) (node, Frame, *ParserError) {
 	}
 	ok, frame = parseExact("@", frame)
 	if ok {
-		slot, _, err := parseStringExpr(frame)
+		slot, frame, err := parseStringExpr(frame)
 		if err != nil {
 			return nil, frame, err.extendMessage("parsing slot name")
 		}
@@ -994,14 +951,13 @@ func parseLink(frame Frame) (node, Frame, *ParserError) {
 }
 
 func parseUnlink(frame Frame) (node, Frame, *ParserError) {
-	frames := splitFrameOn("@", frame)
 	sourcePath, frame, err := parsePath(frame)
 	if err != nil {
 		return nil, frame, err.extendMessage("parsing source path (physical)")
 	}
 	ok, frame := parseExact("@", frame)
 	if ok {
-		destPath, frame, err := parsePath(frames[1])
+		destPath, frame, err := parsePath(frame)
 		if err != nil {
 			return nil, frame, err.extendMessage("parsing destination path (physical)")
 		}
@@ -1019,7 +975,7 @@ func parsePrint(frame Frame) (node, Frame, *ParserError) {
 }
 
 func parseMan(frame Frame) (node, Frame, *ParserError) {
-	if frame.start == frame.end {
+	if frameEnd(frame) {
 		return &helpNode{""}, frame, nil
 	}
 	endCommandName := findNext(" ", frame)
@@ -1031,7 +987,7 @@ func parseMan(frame Frame) (node, Frame, *ParserError) {
 }
 
 func parseCd(frame Frame) (node, Frame, *ParserError) {
-	if frame.start == frame.end {
+	if frameEnd(frame) {
 		return &cdNode{strLeaf{"/"}}, frame, nil
 	}
 	path, frame, err := parsePath(frame)
@@ -1042,14 +998,14 @@ func parseCd(frame Frame) (node, Frame, *ParserError) {
 }
 
 func parseTree(frame Frame) (node, Frame, *ParserError) {
-	if frame.start == frame.end {
+	if frameEnd(frame) {
 		return &treeNode{&pathNode{&strLeaf{"."}}, 0}, frame, nil
 	}
 	path, frame, err := parsePath(frame)
 	if err != nil {
 		return nil, frame, err.extendMessage("parsing tree path")
 	}
-	if frame.start == frame.end {
+	if frameEnd(frame) {
 		return &treeNode{path, 0}, frame, nil
 	}
 	u, frame, err := parseInt(frame)
@@ -1251,7 +1207,7 @@ func parseOrientation(frame Frame) (node, Frame, *ParserError) {
 	}
 	orientation, newFrame, err := parseExpr(frame)
 	if err != nil {
-		return nil, Frame{}, newParserError(frame.empty(), "orientation expected")
+		return nil, frame, newParserError(frame.empty(), "orientation expected")
 	}
 	return orientation, newFrame, nil
 }
@@ -1264,7 +1220,7 @@ func parseColor(frame Frame) (node, Frame, *ParserError) {
 	}
 	color, newFrame, err := parseExpr(frame)
 	if err != nil {
-		return nil, Frame{}, newParserError(frame.empty(), "color expected")
+		return nil, frame, newParserError(frame.empty(), "color expected")
 	}
 	return color, newFrame, nil
 }
@@ -1276,7 +1232,7 @@ func parseKeyWordOrExpr(keywords []string, frame Frame) (node, Frame, *ParserErr
 	}
 	expr, newFrame, err := parseExpr(frame)
 	if err != nil {
-		return nil, Frame{}, newParserError(frame.empty(), "keyword or expr expected")
+		return nil, frame, newParserError(frame.empty(), "keyword or expr expected")
 	}
 	return expr, newFrame, nil
 }
@@ -1303,14 +1259,15 @@ func parseTemperature(frame Frame) (node, Frame, *ParserError) {
 
 func parseStringExpr(frame Frame) (node, Frame, *ParserError) {
 	expr, nextFrame, err := parseExpr(frame)
-	if err == nil {
+	_, startsWithDeref := expr.(*symbolReferenceNode)
+	if err == nil && !startsWithDeref {
 		return expr, nextFrame, nil
 	}
 	frame = skipWhiteSpaces(frame)
-	endStr := findNextAmong([]string{" ", "@", ","}, frame)
+	endStr := findNextAmong([]string{" ", "@", ",", ";"}, frame)
 	str, err := parseRawText(frame.until(endStr))
 	if err != nil {
-		return nil, Frame{}, err.extend(frame, "parsing string expression")
+		return nil, frame, err.extend(frame, "parsing string expression")
 	}
 	return str, skipWhiteSpaces(frame.from(endStr)), nil
 }
@@ -1353,7 +1310,7 @@ func parseObjectParams(sig []objParam, startWithAt bool, frame Frame) (map[strin
 			value, frame, err = parseColor(frame)
 		}
 		if err != nil {
-			return nil, Frame{}, err.extend(frame, "parsing "+param.name)
+			return nil, frame, err.extend(frame, "parsing "+param.name)
 		}
 		values[param.name] = value
 	}
@@ -1370,12 +1327,12 @@ func parseCreateTenant(frame Frame) (node, Frame, *ParserError) {
 }
 
 func parseCreateSite(frame Frame) (node, Frame, *ParserError) {
-	sig := []objParam{{"path", "path"}, {"orientation", "orientation"}}
+	sig := []objParam{{"path", "path"}}
 	params, frame, err := parseObjectParams(sig, false, frame)
 	if err != nil {
 		return nil, frame, err.extendMessage("parsing site parameters")
 	}
-	return &createSiteNode{params["path"], params["orientation"]}, frame, nil
+	return &createSiteNode{params["path"]}, frame, nil
 }
 
 func parseCreateBuilding(frame Frame) (node, Frame, *ParserError) {
@@ -1393,7 +1350,7 @@ func parseCreateRoom(frame Frame) (node, Frame, *ParserError) {
 	if err != nil {
 		return nil, frame, err.extendMessage("parsing room parameters")
 	}
-	if frame.start == frame.end {
+	if frameEnd(frame) {
 		return &createRoomNode{
 			params1["path"],
 			params1["posXY"],
@@ -1406,7 +1363,7 @@ func parseCreateRoom(frame Frame) (node, Frame, *ParserError) {
 	if err != nil {
 		return nil, frame, err.extendMessage("parsing room parameters")
 	}
-	if frame.start == frame.end {
+	if frameEnd(frame) {
 		return &createRoomNode{
 			params1["path"],
 			params1["posXY"],
@@ -1444,7 +1401,7 @@ func parseCreateDevice(frame Frame) (node, Frame, *ParserError) {
 	if err != nil {
 		return nil, frame, err.extendMessage("parsing device parameters")
 	}
-	if frame.start == frame.end {
+	if frameEnd(frame) {
 		return &createDeviceNode{params1["path"], params1["posUOrSlot"], params1["sizeUOrTemplate"], nil}, frame, nil
 	}
 	sig = []objParam{{"side", "side"}}
@@ -1577,8 +1534,12 @@ func parseCommandKeyWord(frame Frame) (string, Frame) {
 }
 
 func parseSingleCommand(frame Frame) (node, Frame, *ParserError) {
+	frame = skipWhiteSpaces(frame)
+	if frameEnd(frame) {
+		return nil, frame, nil
+	}
 	startFrame := frame
-	commandKeyWord, frame := parseCommandKeyWord(skipWhiteSpaces(frame))
+	commandKeyWord, frame := parseCommandKeyWord(frame)
 	if commandKeyWord == "" {
 		return parseUpdate(frame)
 	}
@@ -1597,19 +1558,27 @@ func parseSingleCommand(frame Frame) (node, Frame, *ParserError) {
 }
 
 func parseCommand(frame Frame) (node, Frame, *ParserError) {
-	commandFrames := splitFrameOn(";", frame)
-	statements := []node{}
-	for _, frame := range commandFrames {
-		command, frame, err := parseSingleCommand(frame)
+	commands := []node{}
+	for {
+		command, nextFrame, err := parseSingleCommand(frame)
 		if err != nil {
 			return nil, frame, err.extend(frame, "parsing command")
 		}
-		statements = append(statements, command)
+		frame = nextFrame
+		commands = append(commands, command)
+		frame = skipWhiteSpaces(frame)
+		if frame.start == frame.end {
+			if len(commands) > 1 {
+				return &ast{commands}, frame, nil
+			}
+			return command, frame, nil
+		}
+		ok, nextFrame := parseExact(";", frame)
+		if !ok {
+			return nil, frame, newParserError(frame, "; expected")
+		}
+		frame = skipWhiteSpaces(nextFrame)
 	}
-	if len(statements) == 1 {
-		return statements[0], frame, nil
-	}
-	return &ast{statements}, frame, nil
 }
 
 func firstNonAscii(frame Frame) int {
@@ -1622,7 +1591,6 @@ func firstNonAscii(frame Frame) int {
 }
 
 func Parse(buffer string) (node, *ParserError) {
-	frame := newFrame(buffer)
 	commandDispatch = map[string]func(frame Frame) (node, Frame, *ParserError){
 		"ls":         parseLs,
 		"get":        parseGet,
@@ -1665,7 +1633,7 @@ func Parse(buffer string) (node, *ParserError) {
 		"room":     parseCreateRoom,
 		"ro":       parseCreateRoom,
 		"rack":     parseCreateRack,
-		"ra":       parseCreateRack,
+		"rk":       parseCreateRack,
 		"device":   parseCreateDevice,
 		"dv":       parseCreateDevice,
 		"corridor": parseCreateCorridor,
@@ -1684,6 +1652,11 @@ func Parse(buffer string) (node, *ParserError) {
 		"pwd":          &pwdNode{},
 		"exit":         &exitNode{},
 	}
+	commentIdx := strings.Index(buffer, "//")
+	if commentIdx != -1 {
+		buffer = buffer[:commentIdx]
+	}
+	frame := newFrame(buffer)
 	firstNonAsciiIdx := firstNonAscii(frame)
 	if firstNonAsciiIdx < frame.end {
 		return nil, newParserError(

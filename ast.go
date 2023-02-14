@@ -908,8 +908,7 @@ func (n *createTenantNode) execute() (interface{}, error) {
 }
 
 type createSiteNode struct {
-	path        node
-	orientation node
+	path node
 }
 
 func (n *createSiteNode) execute() (interface{}, error) {
@@ -921,19 +920,7 @@ func (n *createSiteNode) execute() (interface{}, error) {
 	if !ok {
 		return nil, fmt.Errorf("path should be a string")
 	}
-	orientationAny, err := n.orientation.execute()
-	if err != nil {
-		return nil, err
-	}
-	orientation, ok := orientationAny.(string)
-	if !ok {
-		return nil, fmt.Errorf("orientation should be a string")
-	}
-	if !checkIfOrientation(orientation) {
-		return nil, fmt.Errorf("you must provide a valid orientation")
-	}
-	attributes := map[string]any{"orientation": orientation}
-	err = cmd.GetOCLIAtrributes(path, cmd.SITE, map[string]any{"attributes": attributes})
+	err = cmd.GetOCLIAtrributes(path, cmd.SITE, map[string]any{})
 	if err != nil {
 		return nil, err
 	}

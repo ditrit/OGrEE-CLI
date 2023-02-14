@@ -37,6 +37,9 @@ func (n pathNode) getStr() (string, error) {
 	var output_words []string
 	if p[0] != '/' {
 		output_words = strings.Split(cmd.State.CurrPath, "/")[1:]
+	} else {
+		output_words = []string{"Physical"}
+		p = p[1:]
 	}
 	input_words := strings.Split(p, "/")
 	for _, word := range input_words {
@@ -51,6 +54,7 @@ func (n pathNode) getStr() (string, error) {
 		}
 	}
 	r := "/" + strings.Join(output_words, "/")
+	println(r)
 	return path.Clean(r), nil
 }
 

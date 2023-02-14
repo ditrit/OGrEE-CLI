@@ -284,16 +284,13 @@ func lexDeref(l *lexer) stateFn {
 	for isSpace(l.next()) {
 	}
 	l.backup()
-	if !isLetter(l.next()) {
-		return l.errorf("letter expected")
-	}
 	for isAlphaNumeric(l.next()) {
 	}
 	l.backup()
 	for isSpace(l.next()) {
 	}
 	l.backup()
-	if l.next() != '}' {
+	if !l.accept("}") {
 		return l.errorf("} expected")
 	}
 	return l.emit(tokDeref, l.input[l.start+2:l.pos-1])
@@ -314,7 +311,7 @@ func (l *lexer) endNumber(t tokenType, val any) stateFn {
 	c := l.next()
 	l.backup()
 	if isLetter(c) {
-		return l.errorf("unrecognized token (number followed by a letter)")
+		return lexAlphaNumeric
 	}
 	return l.emit(t, val)
 }
@@ -394,7 +391,7 @@ func lexFormattedString(l *lexer) stateFn {
 	if c == eof {
 		return l.emit(tokText, nil)
 	}
-	if c == '&' {
+	if c == '$' {
 		if l.accept("{") {
 			return lexDeref
 		}
