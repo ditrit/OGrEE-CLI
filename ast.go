@@ -37,7 +37,7 @@ type ast struct {
 }
 
 func (a *ast) execute() (interface{}, error) {
-	for i, _ := range a.statements {
+	for i := range a.statements {
 		if a.statements[i] != nil {
 			_, err := a.statements[i].execute()
 			if err != nil {
@@ -194,20 +194,6 @@ func (n *lsAttrNode) execute() (interface{}, error) {
 	path, ok := val.(string)
 	if !ok {
 		return nil, fmt.Errorf("Path should be a string")
-	}
-	cmd.LSATTR(path, n.attr)
-	return nil, nil
-}
-
-type lsAttrGenericNode struct {
-	path node
-	attr string
-}
-
-func (n *lsAttrGenericNode) execute() (interface{}, error) {
-	path, err := AssertString(&n.path, "Path")
-	if err != nil {
-		return nil, err
 	}
 	cmd.LSATTR(path, n.attr)
 	return nil, nil

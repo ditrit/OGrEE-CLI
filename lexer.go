@@ -21,6 +21,8 @@ const (
 	tokLeftBrac   // '['
 	tokRightBrac  // ']'
 	tokComma      // ','
+	tokSemiCol    // ';'
+	tokAt         // '@'
 	tokLeftParen  // '('
 	tokRightParen // ')'
 	tokNot        // '!'
@@ -55,6 +57,8 @@ func (s tokenType) String() string {
 		tokLeftBrac:    "leftBrac",
 		tokRightBrac:   "rightBrac",
 		tokComma:       "comma",
+		tokSemiCol:     "semicol",
+		tokAt:          "at",
 		tokLeftParen:   "leftParen",
 		tokRightParen:  "rightParen",
 		tokNot:         "not",
@@ -180,6 +184,12 @@ func (l *lexer) acceptRun(valid string) {
 	l.backup()
 }
 
+func (l *lexer) acceptRunAlphaNumeric() {
+	for isAlphaNumeric(l.next()) {
+	}
+	l.backup()
+}
+
 func isSpace(c byte) bool {
 	return c == ' ' || c == '\t'
 }
@@ -203,9 +213,6 @@ func lexExpr(l *lexer) stateFn {
 		l.ignore()
 		return lexExpr
 	case '$':
-		if l.next() != '{' {
-			return l.errorf("{ expected")
-		}
 		return lexDeref
 	case '"':
 		return lexString
@@ -281,6 +288,18 @@ func lexExpr(l *lexer) stateFn {
 }
 
 func lexDeref(l *lexer) stateFn {
+	if l.accept("{") {
+		return lexDerefBracket
+	}
+	if !isAlphaNumeric(l.next()) {
+		l.backup()
+		return l.errorf("identifier expected")
+	}
+	l.acceptRunAlphaNumeric()
+	return l.emit(tokDeref, l.input[l.start+1:l.pos])
+}
+
+func lexDerefBracket(l *lexer) stateFn {
 	for isSpace(l.next()) {
 	}
 	l.backup()
@@ -392,9 +411,7 @@ func lexFormattedString(l *lexer) stateFn {
 		return l.emit(tokText, nil)
 	}
 	if c == '$' {
-		if l.accept("{") {
-			return lexDeref
-		}
+		return lexDeref
 	}
 	return lexFormattedString
 }

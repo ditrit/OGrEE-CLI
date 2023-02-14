@@ -27,8 +27,6 @@ var manCommands = []string{
 	"print", "unset", "selection",
 }
 
-var valueRegex = `((\S*)|(".*")|(\(.*\)))`
-
 func sliceContains(slice []string, s string) bool {
 	for _, str := range slice {
 		if str == s {
@@ -147,6 +145,10 @@ func (frame Frame) first() byte {
 	return frame.char(frame.start)
 }
 
+func (frame Frame) String() string {
+	return buildColoredFrame(frame)
+}
+
 func lexerFromFrame(frame Frame) *lexer {
 	return newLexer(frame.buf, frame.start, frame.end)
 }
@@ -237,7 +239,7 @@ func frameEnd(frame Frame) bool {
 }
 
 func parseExact(word string, frame Frame) (bool, Frame) {
-	if frame.start+len(word) < frame.end && frame.until(frame.start+len(word)).str() == word {
+	if frame.start+len(word) <= frame.end && frame.until(frame.start+len(word)).str() == word {
 		return true, frame.forward(len(word))
 	}
 	return false, frame
@@ -458,7 +460,11 @@ func parsePrimaryExpr(l *lexer) (node, *ParserError) {
 	case tokFloat:
 		return &floatLeaf{tok.val.(float64)}, nil
 	case tokString:
-		return &strLeaf{tok.val.(string)}, nil
+		n, err := parseRawText(newFrame(tok.val.(string)))
+		if err != nil {
+			return nil, exprError(l, "cannot parse string")
+		}
+		return n, nil
 	case tokDeref:
 		return &symbolReferenceNode{tok.val.(string)}, nil
 	case tokLeftParen:
@@ -708,7 +714,7 @@ func parseLs(frame Frame) (node, Frame, *ParserError) {
 		return nil, frame, err.extendMessage("parsing ls path")
 	}
 	if attr, ok := args["s"]; ok {
-		return &lsAttrGenericNode{path, attr}, frame, nil
+		return &lsAttrNode{path, attr}, frame, nil
 	}
 	return &lsNode{path}, frame, nil
 }
@@ -1175,6 +1181,37 @@ func parseIf(frame Frame) (node, Frame, *ParserError) {
 	}
 }
 
+func parseAlias(frame Frame) (node, Frame, *ParserError) {
+	name, frame, err := parseWord(frame)
+	if err != nil {
+		return nil, frame, err
+	}
+	frame = skipWhiteSpaces(frame)
+	ok, frame := parseExact("{", frame)
+	if !ok {
+		return nil, frame, newParserError(frame, "{ expected}")
+	}
+	frame = skipWhiteSpaces(frame)
+	command, frame, err := parseCommand(frame)
+	if err != nil {
+		return nil, frame, err.extend(frame, "parsing alias body")
+	}
+	frame = skipWhiteSpaces(frame)
+	ok, frame = parseExact("}", frame)
+	if !ok {
+		return nil, frame, newParserError(frame, "} expected")
+	}
+	return &funcDefNode{name, command}, frame, nil
+}
+
+func parseCallAlias(frame Frame) (node, Frame, *ParserError) {
+	name, frame, err := parseWord(frame)
+	if err != nil {
+		return nil, frame, err.extendMessage("parsing alias call")
+	}
+	return &funcCallNode{name}, frame, nil
+}
+
 func parseObjType(frame Frame) (string, Frame) {
 	candidates := []string{}
 	for command := range createObjDispatch {
@@ -1554,30 +1591,34 @@ func parseSingleCommand(frame Frame) (node, Frame, *ParserError) {
 	if ok {
 		return result, frame, nil
 	}
-	return parseUpdate(startFrame)
+	_, frame, err := parsePath(frame)
+	ok, _ = parseExact(":", frame)
+	if err == nil && ok {
+		return parseUpdate(startFrame)
+	}
+	return parseCallAlias(startFrame)
 }
 
 func parseCommand(frame Frame) (node, Frame, *ParserError) {
 	commands := []node{}
+	var command node
+	var err *ParserError
+	var ok bool
 	for {
-		command, nextFrame, err := parseSingleCommand(frame)
+		command, frame, err = parseSingleCommand(frame)
 		if err != nil {
 			return nil, frame, err.extend(frame, "parsing command")
 		}
-		frame = nextFrame
 		commands = append(commands, command)
 		frame = skipWhiteSpaces(frame)
-		if frame.start == frame.end {
+		ok, frame = parseExact(";", frame)
+		if !ok {
 			if len(commands) > 1 {
 				return &ast{commands}, frame, nil
 			}
 			return command, frame, nil
 		}
-		ok, nextFrame := parseExact(";", frame)
-		if !ok {
-			return nil, frame, newParserError(frame, "; expected")
-		}
-		frame = skipWhiteSpaces(nextFrame)
+		frame = skipWhiteSpaces(frame)
 	}
 }
 
@@ -1621,6 +1662,7 @@ func Parse(buffer string) (node, *ParserError) {
 		"while":      parseWhile,
 		"for":        parseFor,
 		"if":         parseIf,
+		"alias":      parseAlias,
 	}
 	createObjDispatch = map[string]func(frame Frame) (node, Frame, *ParserError){
 		"tenant":   parseCreateTenant,
@@ -1664,6 +1706,12 @@ func Parse(buffer string) (node, *ParserError) {
 			"command should only contain ascii characters",
 		)
 	}
-	node, _, err := parseCommand(frame)
+	node, frame, err := parseCommand(frame)
+	if err != nil {
+		return nil, err
+	}
+	if frame.start != frame.end {
+		return nil, newParserError(frame, "unexpected characters")
+	}
 	return node, err
 }

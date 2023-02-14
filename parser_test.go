@@ -37,6 +37,14 @@ func TestParseExact(t *testing.T) {
 	if nextFrame.str() != "abctest" {
 		t.Errorf("parseExact should return the same next frame")
 	}
+	frame = newFrame("test")
+	ok, nextFrame = parseExact("test", frame)
+	if !ok {
+		t.Errorf("parseExact should return true")
+	}
+	if nextFrame.str() != "" {
+		t.Errorf("parseExact returns the wrong next frame")
+	}
 }
 
 func TestParseWord(t *testing.T) {
@@ -112,38 +120,56 @@ func TestParseArgs(t *testing.T) {
 }
 
 func TestParseExpr(t *testing.T) {
-	frame := newFrame("\"plouf\" + (3 - 4.2) * ${a}  42")
+	frame := newFrame("\"plouf\" + (3 - 4.2) * $ab - ${a}  42")
 	expr, cursor, err := parseExpr(frame)
 	if err != nil {
 		t.Errorf(err.Error())
 	}
 	expectedExpr := &arithNode{
-		op:   "+",
-		left: &strLeaf{"plouf"},
-		right: &arithNode{
-			op: "*",
-			left: &arithNode{
-				op:    "-",
-				left:  &intLeaf{3},
-				right: &floatLeaf{4.2},
+		op: "-",
+		left: &arithNode{
+			op:   "+",
+			left: &strLeaf{"plouf"},
+			right: &arithNode{
+				op: "*",
+				left: &arithNode{
+					op:    "-",
+					left:  &intLeaf{3},
+					right: &floatLeaf{4.2},
+				},
+				right: &symbolReferenceNode{"ab"},
 			},
-			right: &symbolReferenceNode{"a"},
 		},
+		right: &symbolReferenceNode{"a"},
 	}
 	if !reflect.DeepEqual(expr, expectedExpr) {
 		t.Errorf("unexpected expression : \n%s", spew.Sdump(expr))
 	}
-	if cursor.start != 28 {
+	if cursor.start != 34 {
 		t.Errorf("unexpected cursor : %d", cursor.start)
 	}
 }
 
-func TestParseExpr2(t *testing.T) {
+func TestParseExprRange(t *testing.T) {
 	frame := newFrame("42..48")
 	expr, _, _ := parseExpr(frame)
 	expected := &intLeaf{42}
 	if !reflect.DeepEqual(expr, expected) {
 		t.Errorf("unexpected expression : \n%s", spew.Sdump(expr))
+	}
+}
+
+func TestParseExprString(t *testing.T) {
+	frame := newFrame("\"${a}test\"")
+	expr, _, err := parseExpr(frame)
+	if err != nil {
+		t.Errorf("error while parsing : %s", err.Error())
+	}
+	expected := &formatStringNode{"%vtest", []symbolReferenceNode{{"a"}}}
+	if !reflect.DeepEqual(expr, expected) {
+		t.Errorf("unexpected expression : \n%s", spew.Sdump(expr))
+		t.Errorf("unexpected parsing : \ntree : %s\nexpected : %s",
+			spew.Sdump(expr), spew.Sdump(expected))
 	}
 }
 

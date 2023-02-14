@@ -28,7 +28,7 @@ func TestLexDoubleDot(t *testing.T) {
 }
 
 func TestLexFormattedString(t *testing.T) {
-	str := "${a}a"
-	expected := []tokenType{tokDeref, tokWord}
+	str := "${a}a$ab"
+	expected := []tokenType{tokDeref, tokWord, tokDeref}
 	checkTokSequence(expected, str, t)
 }
