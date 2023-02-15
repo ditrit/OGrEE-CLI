@@ -6,6 +6,7 @@ interpreter/y
 .resources/
 .vscode/
 cli
+cli.exe
 main
 main*
 log.txt

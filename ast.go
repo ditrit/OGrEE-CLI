@@ -83,7 +83,7 @@ type arrNode struct {
 }
 
 func (n *arrNode) execute() (interface{}, error) {
-	var r []interface{}
+	var r []float64
 	for i := range n.nodes {
 		v, err := n.nodes[i].execute()
 		if err != nil {
@@ -981,6 +981,7 @@ func (n *createBuildingNode) execute() (interface{}, error) {
 	}
 	posXY, ok := posXYany.([]float64)
 	if !ok || len(posXY) != 2 {
+		fmt.Printf("%v\n", posXYany)
 		return nil, fmt.Errorf("posXY should be a vector2")
 	}
 	rotationAny, err := n.rotation.execute()
