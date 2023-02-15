@@ -998,7 +998,7 @@ func (n *createBuildingNode) execute() (interface{}, error) {
 		return nil, err
 	}
 	template, ok := sizeOrTemplateAny.(string)
-	if ok && checkIfTemplate(template) {
+	if ok && checkIfTemplate(template, cmd.BLDG) {
 		attributes["template"] = template
 	} else {
 		size, ok := sizeOrTemplateAny.([]float64)
@@ -1054,7 +1054,7 @@ func (n *createRoomNode) execute() (interface{}, error) {
 		return nil, err
 	}
 	template, ok := templateAny.(string)
-	if ok && checkIfTemplate(template) {
+	if ok && checkIfTemplate(template, cmd.ROOM) {
 		return nil, fmt.Errorf("template path should be a string")
 	}
 	size, err := n.size.execute()
@@ -1127,7 +1127,7 @@ func (n *createRackNode) execute() (interface{}, error) {
 		return nil, err
 	}
 	template, ok := sizeOrTemplateAny.(string)
-	if ok && checkIfTemplate(template) {
+	if ok && checkIfTemplate(template, cmd.RACK) {
 		attributes["template"] = template
 	} else {
 		size, ok := sizeOrTemplateAny.([]float64)
@@ -1169,7 +1169,7 @@ func (n *createDeviceNode) execute() (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	if !checkIfTemplate(sizeUOrTemplate) {
+	if !checkIfTemplate(sizeUOrTemplate, cmd.DEVICE) {
 		attr["sizeU"] = sizeUOrTemplate
 	} else {
 		attr["template"] = sizeUOrTemplate
