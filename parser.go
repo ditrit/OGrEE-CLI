@@ -1407,7 +1407,7 @@ func parseCreateRoom(frame Frame) (node, Frame, *ParserError) {
 			nil, nil, nil,
 			params1["sizeOrTemplate"]}, frame, nil
 	}
-	sig = []objParam{{"orientation", "axisOrientation"}}
+	sig = []objParam{{"axisOrientation", "axisOrientation"}}
 	params2, frame, err := parseObjectParams(sig, true, frame)
 	if err != nil {
 		return nil, frame, err.extendMessage("parsing room parameters")
@@ -1418,7 +1418,7 @@ func parseCreateRoom(frame Frame) (node, Frame, *ParserError) {
 			params1["posXY"],
 			params1["rotation"],
 			params1["sizeOrTemplate"],
-			params2["orientation"], nil, nil}, frame, nil
+			params2["axisOrientation"], nil, nil}, frame, nil
 	}
 	sig = []objParam{{"floorUnit", "floorUnit"}}
 	params3, frame, err := parseObjectParams(sig, true, frame)
@@ -1430,18 +1430,18 @@ func parseCreateRoom(frame Frame) (node, Frame, *ParserError) {
 		params1["posXY"],
 		params1["rotation"],
 		params1["sizeOrTemplate"],
-		params2["orientation"],
+		params2["axisOrientation"],
 		params3["floorUnit"], nil}, frame, nil
 }
 
 func parseCreateRack(frame Frame) (node, Frame, *ParserError) {
-	sig := []objParam{{"path", "path"}, {"posXY", "expr"},
+	sig := []objParam{{"path", "path"}, {"pos", "expr"},
 		{"sizeOrTemplate", "stringexpr"}, {"orientation", "rackOrientation"}}
 	params, frame, err := parseObjectParams(sig, false, frame)
 	if err != nil {
 		return nil, frame, err.extendMessage("parsing rack parameters")
 	}
-	return &createRackNode{params["path"], params["posXY"], params["sizeOrTemplate"], params["orientation"]}, frame, nil
+	return &createRackNode{params["path"], params["pos"], params["sizeOrTemplate"], params["orientation"]}, frame, nil
 }
 
 func parseCreateDevice(frame Frame) (node, Frame, *ParserError) {

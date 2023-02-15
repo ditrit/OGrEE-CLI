@@ -1016,13 +1016,13 @@ func (n *createBuildingNode) execute() (interface{}, error) {
 }
 
 type createRoomNode struct {
-	path        node
-	posXY       node
-	rotation    node
-	size        node
-	orientation node
-	floorUnit   node
-	template    node
+	path            node
+	posXY           node
+	rotation        node
+	size            node
+	axisOrientation node
+	floorUnit       node
+	template        node
 }
 
 func (n *createRoomNode) execute() (interface{}, error) {
@@ -1050,27 +1050,38 @@ func (n *createRoomNode) execute() (interface{}, error) {
 	if err != nil {
 		return nil, fmt.Errorf("rotation should be a number")
 	}
-	templateAny, err := n.template.execute()
-	if err != nil {
-		return nil, err
+	attributes := map[string]any{"posXY": posXY, "rotation": rotation}
+
+	if n.template != nil {
+		templateAny, err := n.template.execute()
+		if err != nil {
+			return nil, err
+		}
+		template, ok := templateAny.(string)
+		if !ok || !checkIfTemplate(template, cmd.ROOM) {
+			return nil, fmt.Errorf("invalid template")
+		}
+		attributes["template"] = template
+	} else {
+		sizeAny, err := n.size.execute()
+		if err != nil {
+			return nil, err
+		}
+		size, ok := sizeAny.([]float64)
+		if !ok || len(size) != 3 {
+			return nil, fmt.Errorf("size should be a vector3")
+		}
+		attributes["size"] = size
+		axisOrientationAny, err := n.axisOrientation.execute()
+		if err != nil {
+			return nil, err
+		}
+		axisOrientation, ok := axisOrientationAny.(string)
+		if !ok {
+			return nil, fmt.Errorf("orientation should be a string")
+		}
+		attributes["axisOrientation"] = axisOrientation
 	}
-	template, ok := templateAny.(string)
-	if ok && checkIfTemplate(template, cmd.ROOM) {
-		return nil, fmt.Errorf("template path should be a string")
-	}
-	size, err := n.size.execute()
-	if err != nil {
-		return nil, err
-	}
-	orientationAny, err := n.orientation.execute()
-	if err != nil {
-		return nil, err
-	}
-	orientation, ok := orientationAny.(string)
-	if !ok {
-		return nil, fmt.Errorf("orientation should be a string")
-	}
-	attributes := map[string]any{"posXY": posXY, "rotation": rotation, "size": size, "orientation": orientation}
 	if n.floorUnit != nil {
 		floorUnitAny, err := n.floorUnit.execute()
 		if err != nil {
@@ -1091,7 +1102,7 @@ func (n *createRoomNode) execute() (interface{}, error) {
 
 type createRackNode struct {
 	path           node
-	posXY          node
+	pos            node
 	sizeOrTemplate node
 	orientation    node
 }
@@ -1105,13 +1116,13 @@ func (n *createRackNode) execute() (interface{}, error) {
 	if !ok {
 		return nil, fmt.Errorf("path should be a string")
 	}
-	posXYany, err := n.posXY.execute()
+	posAny, err := n.pos.execute()
 	if err != nil {
 		return nil, err
 	}
-	posXY, ok := posXYany.([]float64)
-	if !ok || len(posXY) != 2 {
-		return nil, fmt.Errorf("posXY should be a vector2")
+	pos, ok := posAny.([]float64)
+	if !ok || (len(pos) != 2 && len(pos) != 3) {
+		return nil, fmt.Errorf("position should be a vector2 or a vector3")
 	}
 	orientationAny, err := n.orientation.execute()
 	if err != nil {
@@ -1121,7 +1132,7 @@ func (n *createRackNode) execute() (interface{}, error) {
 	if !ok || (orientation != "front" && orientation != "rear" && orientation != "left" && orientation != "right") {
 		return nil, fmt.Errorf("orientation should be a front, rear, left or right")
 	}
-	attributes := map[string]any{"posXY": posXY, "orientation": orientation}
+	attributes := map[string]any{"posXYZ": pos, "orientation": orientation}
 
 	sizeOrTemplateAny, err := n.sizeOrTemplate.execute()
 	if err != nil {
@@ -1289,22 +1300,22 @@ func (n *createOrphanNode) execute() (interface{}, error) {
 	if !ok {
 		return nil, fmt.Errorf("path should be a string")
 	}
-	templateAny, err := n.template.execute()
-	if err != nil {
-		return nil, err
-	}
-	template, ok := templateAny.(string)
-	if !ok {
-		return nil, fmt.Errorf("template path should be a string")
-	}
-	attributes := map[string]any{"template": template}
-
 	var t int
 	if n.sensor {
 		t = cmd.STRAYSENSOR
 	} else {
 		t = cmd.STRAY_DEV
 	}
+	templateAny, err := n.template.execute()
+	if err != nil {
+		return nil, err
+	}
+	template, ok := templateAny.(string)
+	if !ok || !checkIfTemplate(template, t) {
+		return nil, fmt.Errorf("invalid template")
+	}
+	attributes := map[string]any{"template": template}
+
 	err = cmd.GetOCLIAtrributes(path, t, map[string]any{"attributes": attributes})
 	if err != nil {
 		return nil, err
