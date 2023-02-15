@@ -466,7 +466,19 @@ func parsePrimaryExpr(l *lexer) (node, *ParserError) {
 		}
 		return n, nil
 	case tokDeref:
-		return &symbolReferenceNode{tok.val.(string)}, nil
+		if l.tok.t != tokLeftBrac {
+			return &symbolReferenceNode{tok.val.(string)}, nil
+		}
+		l.nextToken(lexExpr)
+		index, err := parseExprFromLex(l)
+		if err != nil {
+			return nil, err
+		}
+		if l.tok.t != tokRightBrac {
+			return nil, exprError(l, "square bracket opened but not closed")
+		}
+		l.nextToken(lexExpr)
+		return &objReferenceNode{tok.val.(string), index}, nil
 	case tokLeftParen:
 		expr, err := parseExprFromLex(l)
 		if err != nil {
