@@ -1077,8 +1077,9 @@ func (n *createRoomNode) execute() (interface{}, error) {
 			return nil, err
 		}
 		axisOrientation, ok := axisOrientationAny.(string)
-		if !ok {
-			return nil, fmt.Errorf("orientation should be a string")
+		if !ok || (axisOrientation != "+x+y" && axisOrientation != "+x-y" &&
+			axisOrientation != "-x-y" && axisOrientation != "-x+y") {
+			return nil, fmt.Errorf("orientation should be +x+y, +x-y, -x-y or x+y")
 		}
 		attributes["axisOrientation"] = axisOrientation
 	}
