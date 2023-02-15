@@ -4,6 +4,7 @@ import (
 	"cli/logger"
 	l "cli/logger"
 	"cli/models"
+	u "cli/utils"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -50,7 +51,7 @@ func PostObj(ent int, entity string, data map[string]interface{}) (map[string]in
 
 		return respMap["data"].(map[string]interface{}), nil
 	}
-	return nil, fmt.Errorf(respMap["message"].(string))
+	return nil, fmt.Errorf(APIErrorPrefix + respMap["message"].(string))
 }
 
 // Calls API's Validation
@@ -75,7 +76,7 @@ func ValidateObj(data map[string]interface{}, ent string, silence bool) bool {
 
 		return true
 	}
-	println("Error:", string(respMap["message"].(string)))
+	println("Error: ", string(APIErrorPrefix+respMap["message"].(string)))
 	println()
 	return false
 }
@@ -575,9 +576,11 @@ func UpdateObj(Path, id, ent string, data map[string]interface{}, deleteAndPut b
 		attrs := map[string]interface{}{}
 
 		for i := range data {
-			// Since all data types must be sent as string
+			// Since all data of obj attributes must be string
 			// stringify the data before sending
-			data[i] = Stringify(data[i])
+			if u.IsNestedAttr(i, ent) {
+				data[i] = Stringify(data[i])
+			}
 
 			found := GenUpdateJSON(ogData, i, data[i], deleteAndPut)
 			if !found {
@@ -663,7 +666,7 @@ func UpdateObj(Path, id, ent string, data map[string]interface{}, deleteAndPut b
 			} else {
 				if mInf, ok := respJson["message"]; ok {
 					if m, ok := mInf.(string); ok {
-						return nil, fmt.Errorf(m)
+						return nil, fmt.Errorf(APIErrorPrefix + m)
 					}
 				}
 				msg := "Cannot update. Please ensure that your attributes " +
@@ -1386,27 +1389,33 @@ func GetOCLIAtrributes(Path string, ent int, data map[string]interface{}) error 
 	case TENANT:
 		data["domain"] = data["name"]
 		data["parentId"] = nil
-		_, err = PostObj(ent, "tenant", data)
+
 	case SITE:
 		//Default values
 		data["domain"] = domain
 		data["parentId"] = parent["id"]
+		data["attributes"] = map[string]interface{}{}
 
-		_, err = PostObj(ent, "site", data)
 	case BLDG:
 		attr = data["attributes"].(map[string]interface{})
 
-		//Serialise size and posXY if given
-		if _, ok := attr["size"].(string); ok {
-			attr["size"] = serialiseAttr(attr, "size")
+		//Check for template
+		if _, ok := attr["template"]; ok {
+			GetOCLIAtrributesTemplateHelper(attr, data, BLDG)
+
 		} else {
-			attr["size"] = serialiseAttr2(attr, "size")
+			//Serialise size and posXY manually instead
+			if _, ok := attr["size"].(string); ok {
+				attr["size"] = serialiseAttr(attr, "size")
+			} else {
+				attr["size"] = serialiseAttr2(attr, "size")
+			}
 		}
 
 		if attr["size"] == "" {
 			if State.DebugLvl > 0 {
 				l.GetErrorLogger().Println(
-					"User gave invalid size value for creating room")
+					"User gave invalid size value for creating building")
 				return fmt.Errorf("Invalid size attribute provided." +
 					" \nIt must be an array/list/vector with 3 elements." +
 					" Please refer to the wiki or manual reference" +
@@ -1425,7 +1434,7 @@ func GetOCLIAtrributes(Path string, ent int, data map[string]interface{}) error 
 		if attr["posXY"] == "" {
 			if State.DebugLvl > 0 {
 				l.GetErrorLogger().Println(
-					"User gave invalid posXY value for creating room")
+					"User gave invalid posXY value for creating building")
 				return fmt.Errorf("Invalid posXY attribute provided." +
 					" \nIt must be an array/list/vector with 2 elements." +
 					" Please refer to the wiki or manual reference" +
@@ -1435,6 +1444,12 @@ func GetOCLIAtrributes(Path string, ent int, data map[string]interface{}) error 
 			return nil
 		}
 
+		//Check rotation
+		if _, ok := attr["rotation"].(float64); ok {
+			attr["rotation"] =
+				strconv.FormatFloat(attr["rotation"].(float64), 'f', -1, 64)
+		}
+
 		attr["posXYUnit"] = "m"
 		attr["sizeUnit"] = "m"
 		attr["heightUnit"] = "m"
@@ -1442,12 +1457,11 @@ func GetOCLIAtrributes(Path string, ent int, data map[string]interface{}) error 
 		data["parentId"] = parent["id"]
 		data["domain"] = domain
 
-		_, err = PostObj(ent, "building", data)
 	case ROOM:
 		attr = data["attributes"].(map[string]interface{})
 
 		baseAttrs := map[string]interface{}{
-			"orientation": "+N+E", "floorUnit": "t",
+			"floorUnit": "t",
 			"posXYUnit": "m", "sizeUnit": "m",
 			"height":     "5",
 			"heightUnit": "m"}
@@ -1459,19 +1473,6 @@ func GetOCLIAtrributes(Path string, ent int, data map[string]interface{}) error 
 		//NOTE this function also assigns value for "size" attribute
 		GetOCLIAtrributesTemplateHelper(attr, data, ent)
 
-		if attr["size"] == "" {
-			if State.DebugLvl > 0 {
-				l.GetErrorLogger().Println(
-					"User gave invalid size value for creating room")
-				return fmt.Errorf("Invalid size attribute provided." +
-					" \nIt must be an array/list/vector with 3 elements." +
-					" Please refer to the wiki or manual reference" +
-					" for more details on how to create objects " +
-					"using this syntax")
-			}
-			return nil
-		}
-
 		if _, ok := attr["posXY"].(string); ok {
 			attr["posXY"] = serialiseAttr(attr, "posXY")
 		} else {
@@ -1484,6 +1485,25 @@ func GetOCLIAtrributes(Path string, ent int, data map[string]interface{}) error 
 					"User gave invalid posXY value for creating room")
 				return fmt.Errorf("Invalid posXY attribute provided." +
 					" \nIt must be an array/list/vector with 2 elements." +
+					" Please refer to the wiki or manual reference" +
+					" for more details on how to create objects " +
+					"using this syntax")
+			}
+			return nil
+		}
+
+		//Check rotation
+		if _, ok := attr["rotation"].(float64); ok {
+			attr["rotation"] =
+				strconv.FormatFloat(attr["rotation"].(float64), 'f', -1, 64)
+		}
+
+		if attr["size"] == "" {
+			if State.DebugLvl > 0 {
+				l.GetErrorLogger().Println(
+					"User gave invalid size value for creating room")
+				return fmt.Errorf("Invalid size attribute provided." +
+					" \nIt must be an array/list/vector with 3 elements." +
 					" Please refer to the wiki or manual reference" +
 					" for more details on how to create objects " +
 					"using this syntax")
@@ -1499,7 +1519,6 @@ func GetOCLIAtrributes(Path string, ent int, data map[string]interface{}) error 
 			Disp(data)
 		}
 
-		_, err = PostObj(ent, "room", data)
 	case RACK:
 		attr = data["attributes"].(map[string]interface{})
 		parentAttr := parent["attributes"].(map[string]interface{})
@@ -1541,18 +1560,18 @@ func GetOCLIAtrributes(Path string, ent int, data map[string]interface{}) error 
 		}
 
 		//Serialise posXY if given
-		if _, ok := attr["posXY"].(string); ok {
-			attr["posXY"] = serialiseAttr(attr, "posXY")
+		if _, ok := attr["posXYZ"].(string); ok {
+			attr["posXYZ"] = serialiseAttr(attr, "posXYZ")
 		} else {
-			attr["posXY"] = serialiseAttr2(attr, "posXY")
+			attr["posXYZ"] = serialiseAttr2(attr, "posXYZ")
 		}
 
-		if attr["posXY"] == "" {
+		if attr["posXYZ"] == "" {
 			if State.DebugLvl > 0 {
 				l.GetErrorLogger().Println(
-					"User gave invalid posXY value for creating room")
-				return fmt.Errorf("Invalid posXY attribute provided." +
-					" \nIt must be an array/list/vector with 2 elements." +
+					"User gave invalid posXYZ value for creating rack")
+				return fmt.Errorf("Invalid posXYZ attribute provided." +
+					" \nIt must be an array/list/vector with 2 or 3 elements." +
 					" Please refer to the wiki or manual reference" +
 					" for more details on how to create objects " +
 					"using this syntax")
@@ -1564,7 +1583,6 @@ func GetOCLIAtrributes(Path string, ent int, data map[string]interface{}) error 
 		data["domain"] = domain
 		data["attributes"] = attr
 
-		_, err = PostObj(ent, "rack", data)
 	case DEVICE:
 		attr = data["attributes"].(map[string]interface{})
 
@@ -1573,34 +1591,34 @@ func GetOCLIAtrributes(Path string, ent int, data map[string]interface{}) error 
 
 		//First check if attr has only posU & sizeU
 		//reject if true while also converting sizeU to string if numeric
-		if len(attr) == 2 {
-			if sizeU, ok := attr["sizeU"]; ok {
-				sizeUValid := checkNumeric(attr["sizeU"])
+		//if len(attr) == 2 {
+		if sizeU, ok := attr["sizeU"]; ok {
+			sizeUValid := checkNumeric(attr["sizeU"])
 
-				if _, ok := attr["template"]; !ok && sizeUValid == false {
-					l.GetWarningLogger().Println("Invalid parameter provided for device ")
-					return fmt.Errorf("Invalid parameter provided for device")
-				}
+			if _, ok := attr["template"]; !ok && sizeUValid == false {
+				l.GetWarningLogger().Println("Invalid template / sizeU parameter provided for device ")
+				return fmt.Errorf("Please provide a valid device template or sizeU")
+			}
 
-				//Convert block
-				//And Set height
-				if _, ok := sizeU.(int); ok {
-					attr["sizeU"] = strconv.Itoa(sizeU.(int))
-					attr["height"] = strconv.FormatFloat(
-						(float64(sizeU.(int)) * 44.5), 'G', -1, 64)
-				} else if _, ok := sizeU.(float64); ok {
-					attr["sizeU"] = strconv.FormatFloat(sizeU.(float64), 'G', -1, 64)
-					attr["height"] = strconv.FormatFloat(sizeU.(float64)*44.5, 'G', -1, 64)
-				}
-				//End of convert block
-				if _, ok := attr["slot"]; ok {
-					l.GetWarningLogger().Println("Invalid device syntax encountered")
-					return fmt.Errorf("Invalid device syntax: If you have provided a template, it was not found")
-				}
+			//Convert block
+			//And Set height
+			if _, ok := sizeU.(int); ok {
+				attr["sizeU"] = strconv.Itoa(sizeU.(int))
+				attr["height"] = strconv.FormatFloat(
+					(float64(sizeU.(int)) * 44.5), 'G', -1, 64)
+			} else if _, ok := sizeU.(float64); ok {
+				attr["sizeU"] = strconv.FormatFloat(sizeU.(float64), 'G', -1, 64)
+				attr["height"] = strconv.FormatFloat(sizeU.(float64)*44.5, 'G', -1, 64)
+			}
+			//End of convert block
+			if _, ok := attr["slot"]; ok {
+				l.GetWarningLogger().Println("Invalid device syntax encountered")
+				return fmt.Errorf("Invalid device syntax: If you have provided a template, it was not found")
 			}
 		}
+		//}
 
-		//If slot not found
+		//Process the posU/slot attribute
 		if x, ok := attr["posU/slot"]; ok {
 			delete(attr, "posU/slot")
 			//Convert posU to string if numeric
@@ -1614,6 +1632,13 @@ func GetOCLIAtrributes(Path string, ent int, data map[string]interface{}) error 
 				attr["slot"] = ""
 			} else {
 				attr["slot"] = x
+			}
+		}
+
+		//Ensure slot is a string
+		if _, ok := attr["slot"]; ok {
+			if _, ok := attr["slot"].(string); !ok {
+				return fmt.Errorf("The slot name must be a string")
 			}
 		}
 
@@ -1670,7 +1695,6 @@ func GetOCLIAtrributes(Path string, ent int, data map[string]interface{}) error 
 		data["domain"] = domain
 		data["parentId"] = parent["id"]
 		data["attributes"] = attr
-		_, err = PostObj(ent, "device", data)
 
 	case GROUP:
 		//name, category, domain, pid
@@ -1680,8 +1704,6 @@ func GetOCLIAtrributes(Path string, ent int, data map[string]interface{}) error 
 
 		groups := strings.Join(attr["content"].([]string), ",")
 		attr["content"] = groups
-
-		_, err = PostObj(ent, "group", data)
 
 	case CORIDOR:
 		//name, category, domain, pid
@@ -1731,11 +1753,6 @@ func GetOCLIAtrributes(Path string, ent int, data map[string]interface{}) error 
 		data["domain"] = domain
 		data["parentId"] = parent["id"]
 
-		_, err := PostObj(ent, "corridor", data)
-		if err != nil {
-			return err
-		}
-
 	case STRAYSENSOR:
 		attr = data["attributes"].(map[string]interface{})
 		if _, ok := attr["template"]; ok {
@@ -1745,7 +1762,6 @@ func GetOCLIAtrributes(Path string, ent int, data map[string]interface{}) error 
 		} else {
 			attr["template"] = ""
 		}
-		_, err = PostObj(ent, "stray-sensor", data)
 
 	case STRAY_DEV:
 		attr = data["attributes"].(map[string]interface{})
@@ -1754,8 +1770,26 @@ func GetOCLIAtrributes(Path string, ent int, data map[string]interface{}) error 
 		} else {
 			attr["template"] = ""
 		}
-		_, err = PostObj(ent, "stray-device", data)
+
+	default:
+		//Execution should not reach here!
+		return fmt.Errorf("Invalid Object Specified!")
 	}
+
+	//Stringify the attributes if not already
+	if _, ok := data["attributes"]; ok {
+		if attributes, ok := data["attributes"].(map[string]interface{}); ok {
+			for i := range attributes {
+				attributes[i] = Stringify(attributes[i])
+			}
+		}
+	}
+
+	//Because we already stored the string conversion in category
+	//we can do the conversion for templates here
+	data["category"] = strings.Replace(data["category"].(string), "_", "-", 1)
+
+	_, err = PostObj(ent, data["category"].(string), data)
 	if err != nil {
 		return err
 	}
@@ -1769,12 +1803,12 @@ func GetOCLIAtrributesTemplateHelper(attr, data map[string]interface{}, ent int)
 	//data from templates
 	attrSerialiser := func(someVal interface{}, idx string, ent int) string {
 		if x, ok := someVal.(int); ok {
-			if ent == DEVICE || ent == ROOM {
+			if ent == DEVICE || ent == ROOM || ent == BLDG {
 				return strconv.Itoa(x)
 			}
 			return strconv.Itoa(x / 10)
 		} else if x, ok := someVal.(float64); ok {
-			if ent == DEVICE || ent == ROOM {
+			if ent == DEVICE || ent == ROOM || ent == BLDG {
 				return strconv.FormatFloat(x, 'G', -1, 64)
 			}
 			return strconv.FormatFloat(x/10.0, 'G', -1, 64)
@@ -1793,6 +1827,8 @@ func GetOCLIAtrributesTemplateHelper(attr, data map[string]interface{}, ent int)
 			tInt := 0
 			if ent == ROOM {
 				tInt = ROOMTMPL
+			} else if ent == BLDG {
+				tInt = BLDGTMPL
 			} else {
 				tInt = OBJTMPL
 			} //End of determine block
@@ -1820,15 +1856,15 @@ func GetOCLIAtrributesTemplateHelper(attr, data map[string]interface{}, ent int)
 										if t == "chassis" || t == "server" {
 											res := 0
 											if val, ok := sizeInf[2].(float64); ok {
-												res = int((val / 1000) / 0.04445)
+												res = int((val / 1000) / RACKUNIT)
 											} else if val, ok := sizeInf[2].(int); ok {
-												res = int((float64(val) / 1000) / 0.04445)
+												res = int((float64(val) / 1000) / RACKUNIT)
 											} else {
 												//Resort to default value
 												msg := "Warning, invalid value provided for" +
 													" sizeU. Defaulting to 5"
 												println(msg)
-												res = int((5 / 1000) / 0.04445)
+												res = int((5 / 1000) / RACKUNIT)
 											}
 											attr["sizeU"] = strconv.Itoa(res)
 
@@ -1851,6 +1887,8 @@ func GetOCLIAtrributesTemplateHelper(attr, data map[string]interface{}, ent int)
 							delete(attr, "technicalArea")
 						}
 
+						CopyAttr(attr, tmpl, "axisOrientation")
+
 						CopyAttr(attr, tmpl, "reservedArea")
 						if _, ok := attr["reservedArea"]; ok {
 							//tmp, _ = json.Marshal(attr["reservedArea"])
@@ -1864,6 +1902,19 @@ func GetOCLIAtrributesTemplateHelper(attr, data map[string]interface{}, ent int)
 						if _, ok := attr["separators"]; ok {
 							tmp, _ = json.Marshal(attr["separators"])
 							attr["separators"] = string(tmp)
+						}
+
+						CopyAttr(attr, tmpl, "pillars")
+						if _, ok := attr["pillars"]; ok {
+							tmp, _ = json.Marshal(attr["pillars"])
+							attr["pillars"] = string(tmp)
+						}
+
+						CopyAttr(attr, tmpl, "floorUnit")
+						if _, ok := attr["floorUnit"]; ok {
+							if floorUnit, ok := attr["floorUnit"].(string); ok {
+								attr["floorUnit"] = floorUnit
+							}
 						}
 
 						CopyAttr(attr, tmpl, "tiles")
@@ -1884,11 +1935,33 @@ func GetOCLIAtrributesTemplateHelper(attr, data map[string]interface{}, ent int)
 							attr["aisles"] = string(tmp)
 						}
 
+						CopyAttr(attr, tmpl, "vertices")
+						if _, ok := attr["vertices"]; ok {
+							tmp, _ = json.Marshal(attr["vertices"])
+							attr["vertices"] = string(tmp)
+						}
+
 						CopyAttr(attr, tmpl, "colors")
 						if _, ok := attr["colors"]; ok {
 							tmp, _ = json.Marshal(attr["colors"])
 							attr["colors"] = string(tmp)
 						}
+
+						CopyAttr(attr, tmpl, "tileAngle")
+						if _, ok := attr["tileAngle"]; ok {
+							if tileAngle, ok := attr["tileAngle"].(int); ok {
+								attr["tileAngle"] = strconv.Itoa(tileAngle)
+							}
+
+							if tileAngleF, ok := attr["tileAngle"].(float64); ok {
+								tileAngleStr := strconv.FormatFloat(tileAngleF, 'f', -1, 64)
+								attr["tileAngle"] = tileAngleStr
+							}
+						}
+
+					} else if ent == BLDG {
+						attr["sizeUnit"] = "m"
+						attr["heightUnit"] = "m"
 
 					} else {
 						attr["sizeUnit"] = "cm"
@@ -1908,7 +1981,10 @@ func GetOCLIAtrributesTemplateHelper(attr, data map[string]interface{}, ent int)
 
 					//fbxModel section
 					if check := CopyAttr(attr, tmpl, "fbxModel"); !check {
-						attr["fbxModel"] = ""
+						if ent != BLDG {
+							attr["fbxModel"] = ""
+						}
+
 					}
 
 					//Copy orientation if available
@@ -2026,6 +2102,18 @@ func FocusUI(path string) {
 				return
 			}
 		}
+		category := EntityStrToInt(obj["category"].(string))
+		if category == TENANT || category == SITE ||
+			category == BLDG || category == ROOM {
+			if State.DebugLvl > 0 {
+				msg := "You cannot focus on this object. Note you cannot" +
+					" focus on Tenants, Sites, Buildings and Rooms. " +
+					"For more information please refer to the help doc  (man >)"
+				println(msg)
+				return
+			}
+		}
+
 		id = obj["id"].(string)
 	} else {
 		id = ""
@@ -2699,21 +2787,35 @@ func LoadFile(path string) {
 func LoadTemplate(data map[string]interface{}, filePath string) {
 	var URL string
 
-	if cat, _ := data["category"]; cat == "room" || data["description"] == nil {
+	if cat, _ := data["category"]; cat == "room" {
 		//Room template
 		URL = State.APIURL + "/api/room-templates"
-	} else {
-		//Obj template
+	} else if cat == "bldg" || cat == "building" {
+		//Bldg template
+		URL = State.APIURL + "/api/bldg-templates"
+	} else if cat == "rack" || cat == "device" {
+		// Obj template
 		URL = State.APIURL + "/api/obj-templates"
+	} else {
+		println("This template does not have a valid category. Please add a category attribute with a value of building or room or rack or device")
+		return
 	}
 
 	r, e := models.Send("POST", URL, GetKey(), data)
 	if e != nil {
 		l.GetErrorLogger().Println(e.Error())
-		if State.DebugLvl > 0 {
+		if State.DebugLvl > NONE {
 			println("Error: ", e.Error())
 		}
 
+	}
+
+	//Crashes here if API timeout
+	if r == nil {
+		if State.DebugLvl > NONE {
+			println("Unable to recieve response from API")
+		}
+		return
 	}
 
 	if r.StatusCode == http.StatusCreated {
@@ -2725,7 +2827,7 @@ func LoadTemplate(data map[string]interface{}, filePath string) {
 			println("Error template wasn't loaded")
 			if mInf, ok := parsedResp["message"]; ok {
 				if msg, ok := mInf.(string); ok {
-					println(msg)
+					println(APIErrorPrefix + msg)
 				}
 			}
 
@@ -2845,12 +2947,10 @@ func InteractObject(path string, keyword string, val interface{}, fromAttr bool)
 
 			if _, ok := obj[value]; ok {
 				if value == "description" {
-					//val = desc[0]
-					//for i := range desc {
-					//	val =
-					//}
+
 					desc := obj["description"].([]interface{})
 					val = ""
+					//Combine entire the description array into a string
 					for i := 0; i < len(desc); i++ {
 						if i == 0 {
 							val = desc[i].(string)
@@ -2867,30 +2967,31 @@ func InteractObject(path string, keyword string, val interface{}, fromAttr bool)
 				val = innerMap[value]
 			} else {
 				if strings.Contains(value, "description") == true {
-					desc := obj["description"].([]interface{})
-					if len(value) > 11 { //descriptionX format
-						//split the number and description
-						numStr := strings.Split(value, "description")[1]
-						num, e := strconv.Atoi(numStr)
-						if e != nil {
-							return e
-						}
+					if desc, ok := obj["description"].([]interface{}); ok {
+						if len(value) > 11 { //descriptionX format
+							//split the number and description
+							numStr := strings.Split(value, "description")[1]
+							num, e := strconv.Atoi(numStr)
+							if e != nil {
+								return e
+							}
 
-						if num < 0 {
-							return fmt.Errorf("Description index must be positive")
-						}
+							if num < 0 {
+								return fmt.Errorf("Description index must be positive")
+							}
 
-						if num >= len(desc) {
-							msg := "Description index is out of" +
-								" range. The length for this object is: " +
-								strconv.Itoa(len(desc))
-							return fmt.Errorf(msg)
-						}
-						val = desc[num]
+							if num >= len(desc) {
+								msg := "Description index is out of" +
+									" range. The length for this object is: " +
+									strconv.Itoa(len(desc))
+								return fmt.Errorf(msg)
+							}
+							val = desc[num]
 
-					} else {
-						val = innerMap[value]
-					}
+						} else {
+							val = innerMap[value]
+						}
+					} //Otherwise the description is a string
 
 				} else {
 					msg := "The specified attribute does not exist" +
@@ -3268,6 +3369,14 @@ func OnlinePathResolve(path []string) []string {
 		return []string{basePath}
 	}
 
+	if path[0] == "BldgTemplates" {
+		basePath += "/bldg-templates"
+		if len(path) > 1 {
+			basePath += "/" + path[1]
+		}
+		return []string{basePath}
+	}
+
 	if path[0] == "Groups" {
 		basePath += "/groups"
 		if len(path) > 1 {
@@ -3383,6 +3492,14 @@ func OnlineLevelResolver(path []string) []string {
 		return []string{basePath}
 	}
 
+	if path[0] == "BldgTemplates" {
+		basePath += "/bldg-templates"
+		if len(path) > 1 {
+			basePath += "/" + path[1]
+		}
+		return []string{basePath}
+	}
+
 	if path[0] == "Groups" {
 		basePath += "/groups"
 		if len(path) > 1 {
@@ -3453,6 +3570,8 @@ func fetchTemplate(name string, objType int) map[string]interface{} {
 	var URL string
 	if objType == ROOMTMPL {
 		URL = State.APIURL + "/api/room_templates/" + name
+	} else if objType == BLDGTMPL {
+		URL = State.APIURL + "/api/bldg_templates/" + name
 	} else {
 		URL = State.APIURL + "/api/obj_templates/" + name
 	}

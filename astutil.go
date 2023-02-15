@@ -2,6 +2,7 @@ package main
 
 import (
 	cmd "cli/controllers"
+	u "cli/utils"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -35,11 +36,14 @@ func checkTypeAreNumeric(x, y interface{}) bool {
 
 func checkIfOrientation(x string) bool {
 	switch x {
-	case "EN", "NW", "WS", "SE", "NE", "SW",
+	case /*"EN", "NW", "WS", "SE", "NE", "SW",*/
 		"-E-N", "-E+N", "+E-N", "+E+N", "+N+E",
+		"+N-E", "-N-E", "-N+E",
 		"-N-W", "-N+W", "+N-W", "+N+W",
 		"-W-S", "-W+S", "+W-S", "+W+S",
-		"-S-E", "-S+E", "+S-E", "+S+E":
+		"-S-E", "-S+E", "+S-E", "+S+E",
+		"+x+y", "+x-y", "-x-y", "-x+y",
+		"+X+Y", "+X-Y", "-X-Y", "-X+Y":
 		return true
 	default:
 		return false
@@ -73,6 +77,8 @@ func fileToJSON(path string) map[string]interface{} {
 	return data
 }
 
+// Iterates through x and executes the element if the
+// element is a node
 func evalMapNodes(x map[string]interface{}) (map[string]interface{}, error) {
 	result := make(map[string]interface{})
 	for i := range x {
@@ -111,12 +117,23 @@ func evalNodeArr[elt comparable](arr *[]node, x []elt) ([]elt, error) {
 }
 
 // This func is for distinguishing template from sizeU
-// in the OCLI syntax for creating devices
+// for creating devices,
+// distinguishing template from size when creating buildings,
+// and template validity check for rooms,
 // refer to:
 // https://github.com/ditrit/OGrEE-3D/wiki/CLI-langage#Create-a-Device
-func checkIfTemplate(x interface{}) bool {
+func checkIfTemplate(x interface{}, ent int) bool {
+	var location string
 	if s, ok := x.(string); ok {
-		_, exists := cmd.CheckObject("/Logical/ObjectTemplates/"+s, true)
+		switch ent {
+		case cmd.BLDG:
+			location = "/Logical/BldgTemplates/" + s
+		case cmd.ROOM:
+			location = "/Logical/RoomTemplates/" + s
+		default:
+			location = "/Logical/ObjectTemplates/" + s
+		}
+		_, exists := cmd.CheckObject(location, true)
 		return exists
 	}
 	return false
@@ -135,52 +152,36 @@ func resMap(x map[string]interface{}, ent string, isUpdate bool) (map[string]int
 			res[key] = val
 			continue
 		}
-		switch ent {
-		case "sensor", "group":
-			switch key {
-			case "id", "name", "category", "parentID",
-				"description", "domain", "type",
-				"parentid", "parentId":
-				res[key] = val
 
-			default:
-				attrs[key] = val
-			}
-		case "room_template":
-			switch key {
-			case "id", "slug", "orientation", "separators",
-				"tiles", "colors", "rows", "sizeWDHm",
-				"technicalArea", "reservedArea":
-				res[key] = val
-
-			default:
-				attrs[key] = val
-			}
-		case "obj_template":
-			switch key {
-			case "id", "slug", "description", "category",
-				"slots", "colors", "components", "sizeWDHmm",
-				"fbxModel":
-				res[key] = val
-
-			default:
-				attrs[key] = val
-			}
-		default:
-			switch key {
-			case "id", "name", "category", "parentID",
-				"description", "domain", "parentid", "parentId":
-				res[key] = val
-
-			default:
-				attrs[key] = val
-			}
+		if u.IsNestedAttr(key, ent) {
+			attrs[key] = val
+		} else {
+			res[key] = val
 		}
 	}
 	if len(attrs) > 0 {
 		res["attributes"] = attrs
 	}
 	return res, nil
+}
+
+// errResponder helper func for specialUpdateNode
+// used for separator, pillar err msgs and parseAreas()
+func errorResponder(attr, numElts string, multi bool) error {
+	var errorMsg string
+	if multi {
+		errorMsg = "Invalid " + attr + " attributes provided." +
+			" They must be arrays/lists/vectors with " + numElts + " elements."
+	} else {
+		errorMsg = "Invalid " + attr + " attribute provided." +
+			" It must be an array/list/vector with " + numElts + " elements."
+	}
+
+	segment := " Please refer to the wiki or manual reference" +
+		" for more details on how to create objects " +
+		"using this syntax"
+
+	return fmt.Errorf(errorMsg + segment)
 }
 
 func IsMapStrInf(x interface{}) bool {

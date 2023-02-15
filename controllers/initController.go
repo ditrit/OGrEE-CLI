@@ -36,6 +36,7 @@ func InitDebugLevel(verbose string) {
 		"DEBUG":   DEBUG,
 	}[verbose]
 	if !ok {
+		println("Invalid Logging Mode detected. Resorting to default: ERROR")
 		State.DebugLvl = 1
 	}
 }
@@ -109,6 +110,14 @@ func InitState(analyser string, env map[string]string) {
 	rTemplate.Name = "RoomTemplates"
 	rTemplate.Path = "/Logical"
 	SearchAndInsert(&State.TreeHierarchy, rTemplate, "/Logical")
+
+	bTemplate := &Node{}
+	bTemplate.ID = "3"
+	bTemplate.PID = "0"
+	bTemplate.Entity = -1
+	bTemplate.Name = "BldgTemplates"
+	bTemplate.Path = "/Logical"
+	SearchAndInsert(&State.TreeHierarchy, bTemplate, "/Logical")
 
 	group := &Node{}
 	group.ID = "3"
@@ -436,8 +445,17 @@ func CheckKeyIsValid(key string) bool {
 	}
 
 	if resp.StatusCode != 200 {
-		readline.Line("HTTP Response Status code" +
+		readline.Line("HTTP Response Status code: " +
 			strconv.Itoa(resp.StatusCode))
+		if State.DebugLvl > NONE {
+			x := ParseResponse(resp, err, " Read API Response message")
+			if x != nil {
+				println("[API] " + x["message"].(string))
+			} else {
+				println("Was not able to read API Response message")
+			}
+		}
+
 		return false
 	}
 

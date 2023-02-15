@@ -2,6 +2,7 @@ package controllers
 
 //This file has a collection of utility functions used in the
 //controller package
+//And const definitions used throughout the controllers package
 import (
 	"encoding/json"
 	"fmt"
@@ -21,6 +22,7 @@ const (
 	SENSOR
 	ROOMTMPL
 	OBJTMPL
+	BLDGTMPL
 	GROUP
 	STRAY_DEV
 	STRAYSENSOR
@@ -34,6 +36,12 @@ const (
 	INFO
 	DEBUG
 )
+
+// Error Message Const
+// TODO: Replace Const with Err Msg/Reporting Func
+// that distinguishes API & CLI Errors
+const APIErrorPrefix = "[Response From API] "
+const RACKUNIT = .04445 //meter
 
 // Display contents of []map[string]inf array
 func DispMapArr(x []map[string]interface{}) {
@@ -185,6 +193,8 @@ func EntityToString(entity int) string {
 		return "room_template"
 	case OBJTMPL:
 		return "obj_template"
+	case BLDGTMPL:
+		return "bldg_template"
 	case CABINET:
 		return "cabinet"
 	case GROUP:
@@ -222,6 +232,8 @@ func EntityStrToInt(entity string) int {
 		return ROOMTMPL
 	case "obj_template":
 		return OBJTMPL
+	case "bldg_template":
+		return BLDGTMPL
 	case "cabinet", "cb":
 		return CABINET
 	case "group", "gr":
@@ -254,6 +266,8 @@ func GetParentOfEntity(ent int) int {
 	case PWRPNL:
 		return ROOM
 	case ROOMTMPL:
+		return -1
+	case BLDGTMPL:
 		return -1
 	case OBJTMPL:
 		return -1

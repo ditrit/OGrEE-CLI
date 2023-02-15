@@ -1580,15 +1580,6 @@ func parseAreas(areas map[string]interface{}) (map[string]interface{}, error) {
 	var reservedStr string
 	var techStr string
 
-	errorResponder := func(attr string) (map[string]interface{}, error) {
-		errorMsg := "Invalid " + attr + " attribute provided." +
-			" It must be an array/list/vector with 4 elements." +
-			" Please refer to the wiki or manual reference" +
-			" for more details on how to create objects " +
-			"using this syntax"
-		return nil, fmt.Errorf(errorMsg)
-	}
-
 	if reserved, ok := areas["reserved"].([]interface{}); ok {
 		if tech, ok := areas["technical"].([]interface{}); ok {
 			if len(reserved) == 4 && len(tech) == 4 {
@@ -1606,18 +1597,18 @@ func parseAreas(areas map[string]interface{}) (map[string]interface{}, error) {
 				areas["technical"] = techStr
 			} else {
 				if len(reserved) != 4 && len(tech) == 4 {
-					return errorResponder("reserved")
+					return nil, errorResponder("reserved", "4", false)
 				} else if len(tech) != 4 && len(reserved) == 4 {
-					return errorResponder("technical")
+					return nil, errorResponder("technical", "4", false)
 				} else { //Both invalid
-					return errorResponder("reserved and technical")
+					return nil, errorResponder("reserved and technical", "4", true)
 				}
 			}
 		} else {
-			return errorResponder("technical")
+			return nil, errorResponder("technical", "4", false)
 		}
 	} else {
-		return errorResponder("reserved")
+		return nil, errorResponder("reserved", "4", false)
 	}
 	return areas, nil
 }
