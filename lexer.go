@@ -39,45 +39,43 @@ const (
 	tokGeq        // '>='
 	tokGtr        // '>'
 	tokLss        // '<'
-	tokOrientation
 	tokColor
 	tokText
 )
 
 func (s tokenType) String() string {
 	return map[tokenType]string{
-		tokEOF:         "eof",
-		tokError:       "error",
-		tokWord:        "word",
-		tokDeref:       "deref",
-		tokInt:         "int",
-		tokFloat:       "float",
-		tokBool:        "bool",
-		tokString:      "string",
-		tokLeftBrac:    "leftBrac",
-		tokRightBrac:   "rightBrac",
-		tokComma:       "comma",
-		tokSemiCol:     "semicol",
-		tokAt:          "at",
-		tokLeftParen:   "leftParen",
-		tokRightParen:  "rightParen",
-		tokNot:         "not",
-		tokAdd:         "add",
-		tokSub:         "sub",
-		tokMul:         "mul",
-		tokDiv:         "div",
-		tokMod:         "mod",
-		tokOr:          "or",
-		tokAnd:         "and",
-		tokEq:          "eq",
-		tokNeq:         "neq",
-		tokLeq:         "leq",
-		tokGeq:         "geq",
-		tokGtr:         "gtr",
-		tokLss:         "lss",
-		tokOrientation: "orientation",
-		tokColor:       "color",
-		tokText:        "text",
+		tokEOF:        "eof",
+		tokError:      "error",
+		tokWord:       "word",
+		tokDeref:      "deref",
+		tokInt:        "int",
+		tokFloat:      "float",
+		tokBool:       "bool",
+		tokString:     "string",
+		tokLeftBrac:   "leftBrac",
+		tokRightBrac:  "rightBrac",
+		tokComma:      "comma",
+		tokSemiCol:    "semicol",
+		tokAt:         "at",
+		tokLeftParen:  "leftParen",
+		tokRightParen: "rightParen",
+		tokNot:        "not",
+		tokAdd:        "add",
+		tokSub:        "sub",
+		tokMul:        "mul",
+		tokDiv:        "div",
+		tokMod:        "mod",
+		tokOr:         "or",
+		tokAnd:        "and",
+		tokEq:         "eq",
+		tokNeq:        "neq",
+		tokLeq:        "leq",
+		tokGeq:        "geq",
+		tokGtr:        "gtr",
+		tokLss:        "lss",
+		tokColor:      "color",
+		tokText:       "text",
 	}[s]
 }
 
@@ -373,27 +371,6 @@ func lexAlphaNumeric(l *lexer) stateFn {
 		}
 		return l.emit(tokWord, nil)
 	}
-}
-
-func lexOrientation(l *lexer) stateFn {
-	if l.accept("+-") {
-		if l.accept("EW") {
-			l.accept("+-")
-			l.accept("NW")
-		} else if l.accept("NW") {
-			l.accept("+-")
-			l.accept("EW")
-		} else {
-			return l.errorf("invalid orientation")
-		}
-	} else if l.accept("EW") {
-		l.accept("NW")
-	} else if l.accept("NW") {
-		l.accept("EW")
-	} else {
-		return l.errorf("invalid orientation")
-	}
-	return l.emit(tokOrientation, nil)
 }
 
 func lexColor(l *lexer) stateFn {

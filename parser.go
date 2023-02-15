@@ -1248,19 +1248,6 @@ func parseCreate(frame Frame) (node, Frame, *ParserError) {
 	return createObjDispatch[objType](frame)
 }
 
-func parseOrientation(frame Frame) (node, Frame, *ParserError) {
-	l := lexerFromFrame(frame)
-	tok := l.nextToken(lexOrientation)
-	if tok.t == tokOrientation {
-		return &strLeaf{tok.str}, frame.from(tok.end), nil
-	}
-	orientation, newFrame, err := parseExpr(frame)
-	if err != nil {
-		return nil, frame, newParserError(frame.empty(), "orientation expected")
-	}
-	return orientation, newFrame, nil
-}
-
 func parseColor(frame Frame) (node, Frame, *ParserError) {
 	l := lexerFromFrame(frame)
 	tok := l.nextToken(lexColor)
@@ -1345,8 +1332,6 @@ func parseObjectParams(sig []objParam, startWithAt bool, frame Frame) (map[strin
 			value, frame, err = parseExpr(frame)
 		case "stringexpr":
 			value, frame, err = parseStringExpr(frame)
-		case "orientation":
-			value, frame, err = parseOrientation(frame)
 		case "axisOrientation":
 			value, frame, err = parseAxisOrientation(frame)
 		case "rackOrientation":
