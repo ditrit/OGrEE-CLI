@@ -8,32 +8,26 @@ GITHASH=$(shell git rev-parse HEAD)
 GITBRANCH=$(shell git branch --show-current)
 GITHASHDATE=$(shell git show -s --format=%ci HEAD | sed 's/ /\//g')
 
-#File building dependencies
-FILEDEPS = main.go ast.go semantic.go repl.go ocli.go aststr.go \
- astnum.go astbool.go astflow.go astutil.go completer.go parser.go lexer.go
+.PHONY: main mac win
 
-main: $(FILEDEPS)
+main:
 	go build \-ldflags="-X  cli/controllers.BuildHash=$(GITHASH) \
 	-X cli/controllers.BuildTree=$(GITBRANCH) \
 	-X cli/controllers.BuildTime=$(DATE) \
-	-X cli/controllers.GitCommitDate=$(GITHASHDATE)" \
-	$(FILEDEPS)
+	-X cli/controllers.GitCommitDate=$(GITHASHDATE)"
 
 #OTHER PLATFORM COMPILATION BLOCK
 mac: $(FILEDEPS)
 	GOOS=darwin go build \-ldflags="-X  cli/controllers.BuildHash=$(GITHASH) \
 	-X cli/controllers.BuildTree=$(GITBRANCH) \
 	-X cli/controllers.BuildTime=$(DATE) \
-	-X cli/controllers.GitCommitDate=$(GITHASHDATE)" \
-	$(FILEDEPS)
+	-X cli/controllers.GitCommitDate=$(GITHASHDATE)"
 	
 win: $(FILEDEPS)
 	GOOS=windows go build \-ldflags="-X  cli/controllers.BuildHash=$(GITHASH) \
 	-X cli/controllers.BuildTree=$(GITBRANCH) \
 	-X cli/controllers.BuildTime=$(DATE) \
-	-X cli/controllers.GitCommitDate=$(GITHASHDATE)" \
-	$(FILEDEPS)
+	-X cli/controllers.GitCommitDate=$(GITHASHDATE)"
 	
 clean:
-	rm main
-
+	rm cli
