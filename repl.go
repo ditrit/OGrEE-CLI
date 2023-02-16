@@ -45,6 +45,24 @@ func InterpretLine(str string) bool {
 	return true
 }
 
+// Init environment if env file was not provided
+// Useful for docker deployment
+func InitEnvFromShell(env map[string]string) {
+	godotenv.Load()
+	envVars := []string{"acDrawableJson", "apiKey", "apiURL",
+		"buildingDrawableJson", "cabinetDrawableJson",
+		"corridorDrawableJson", "deviceDrawableJson", "drawLimit", "drawable",
+		"groupDrawableJson", "listenPort", "objTemplateDrawableJson",
+		"powerpanelDrawableJson", "rackDrawableJson", "roomDrawableJson",
+		"roomTemplateDrawableJson", "rowDrawableJson", "sensorDrawableJson",
+		"separatorDrawableJson", "siteDrawableJson", "tenantDrawableJson",
+		"tileDrawableJson", "unityTimeout", "unityURL", "updates", "user"}
+
+	for _, item := range envVars {
+		env[item] = os.Getenv(item)
+	}
+}
+
 // Init the Shell
 func Start(flags *Flags) {
 	l.InitLogs()
@@ -56,11 +74,9 @@ func Start(flags *Flags) {
 	if envErr != nil {
 		fmt.Println("Cannot read environment file", flags.envPath, ":", envErr.Error())
 		fmt.Println("Defaulting to parent passed environment variables")
-		//fmt.Println("Please ensure that you have a properly formatted environment file saved as '.env' in the same directory here with the shell")
 		fmt.Println("\n\nFor more details please refer to: https://ogree.ditrit.io/htmls/programming.html")
 		fmt.Println("View an environment file example here: https://ogree.ditrit.io/htmls/clienv.html")
-		//return
-		godotenv.Load()
+		InitEnvFromShell(env)
 	}
 
 	c.InitTimeout(env)                           //Set the Unity Timeout
