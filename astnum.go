@@ -74,7 +74,7 @@ func (a *arithNode) execute() (interface{}, error) {
 			if rightIntVal == 0 {
 				return nil, fmt.Errorf("cannot divide by 0")
 			}
-			return float64(leftIntVal) / float64(leftIntVal), nil
+			return float64(leftIntVal) / float64(rightIntVal), nil
 		case "%":
 			return leftIntVal % rightIntVal, nil
 		default:
@@ -109,7 +109,7 @@ func (a *arithNode) execute() (interface{}, error) {
 			leftStringVal = numToString(lv)
 		}
 		if !rightString && (rightFloat || rightInt) {
-			rightStringVal = numToString(lv)
+			rightStringVal = numToString(rv)
 		}
 		switch a.op {
 		case "+":
