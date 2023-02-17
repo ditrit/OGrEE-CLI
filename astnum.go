@@ -7,47 +7,20 @@ import (
 	"strconv"
 )
 
-type numNode interface {
-	getNum() (float64, error)
-	execute() (interface{}, error)
-}
-
-type floatNode interface {
-	getFloat() (float64, error)
-	execute() (interface{}, error)
-}
-
 type floatLeaf struct {
 	val float64
 }
 
-func (l floatLeaf) getFloat() (float64, error) {
-	return l.val, nil
-}
 func (l floatLeaf) execute() (interface{}, error) {
 	return l.val, nil
-}
-
-func (l floatLeaf) getNum() (float64, error) {
-	return l.val, nil
-}
-
-type intNode interface {
-	getInt() (int, error)
 }
 
 type intLeaf struct {
 	val int
 }
 
-func (l intLeaf) getInt() (int, error) {
-	return l.val, nil
-}
 func (l intLeaf) execute() (interface{}, error) {
 	return l.val, nil
-}
-func (l intLeaf) getNum() (float64, error) {
-	return float64(l.val), nil
 }
 
 func numToString(num any) string {
@@ -98,11 +71,14 @@ func (a *arithNode) execute() (interface{}, error) {
 		case "*":
 			return leftIntVal * rightIntVal, nil
 		case "/":
-			return leftIntVal / rightIntVal, nil
+			if rightIntVal == 0 {
+				return nil, fmt.Errorf("cannot divide by 0")
+			}
+			return float64(leftIntVal) / float64(leftIntVal), nil
 		case "%":
 			return leftIntVal % rightIntVal, nil
 		default:
-			return nil, fmt.Errorf("Invalid operator for integer operands")
+			return nil, fmt.Errorf("invalid operator for integer operands")
 		}
 	}
 	if (leftInt || leftFloat) && (rightInt || rightFloat) {
@@ -120,9 +96,12 @@ func (a *arithNode) execute() (interface{}, error) {
 		case "*":
 			return leftFloatVal * rightFloatVal, nil
 		case "/":
+			if rightFloatVal == 0. {
+				return nil, fmt.Errorf("cannot divide by 0")
+			}
 			return leftFloatVal / rightFloatVal, nil
 		default:
-			return nil, fmt.Errorf("Invalid operator for float operands")
+			return nil, fmt.Errorf("invalid operator for float operands")
 		}
 	}
 	if leftString || rightString {
@@ -136,11 +115,11 @@ func (a *arithNode) execute() (interface{}, error) {
 		case "+":
 			return leftStringVal + rightStringVal, nil
 		default:
-			return nil, fmt.Errorf("Invalid operator for string operands")
+			return nil, fmt.Errorf("invalid operator for string operands")
 		}
 	}
 	l.GetWarningLogger().Println("Invalid arithmetic operation attempted")
-	return nil, fmt.Errorf("Invalid arithmetic operation attempted")
+	return nil, fmt.Errorf("invalid arithmetic operation attempted")
 }
 
 type negateNode struct {
