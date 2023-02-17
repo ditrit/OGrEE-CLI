@@ -54,7 +54,6 @@ func (n pathNode) getStr() (string, error) {
 		}
 	}
 	r := "/" + strings.Join(output_words, "/")
-	println(r)
 	return path.Clean(r), nil
 }
 
