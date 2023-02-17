@@ -1160,26 +1160,34 @@ func parseIf(frame Frame) (node, Frame, *ParserError) {
 	if err != nil {
 		return nil, frame, err
 	}
-	ok, frame := parseExact("then", frame)
+	ok, frame := parseExact("{", frame)
 	if !ok {
-		return nil, frame, newParserError(frame, "then expected")
+		return nil, frame, newParserError(frame, "{ expected")
 	}
 	body, frame, err := parseCommand(frame)
 	if err != nil {
 		return nil, frame, err.extend(frame, "parsing if body")
 	}
-	keyword, frame := parseKeyWord([]string{"fi", "else", "elif"}, frame)
+	ok, frame = parseExact("}", frame)
+	if !ok {
+		return nil, frame, newParserError(frame, "} expected")
+	}
+	keyword, frame := parseKeyWord([]string{"else", "elif"}, skipWhiteSpaces(frame))
 	switch keyword {
-	case "fi":
+	case "":
 		return &ifNode{condition, body, nil}, frame, nil
 	case "else":
-		fiIdx := findKeyword(" fi", frame)
-		if fiIdx == frame.end {
-			return nil, frame, newParserError(frame, "fi expected")
+		ok, frame := parseExact("{", skipWhiteSpaces(frame))
+		if !ok {
+			return nil, frame, newParserError(frame, "{ expected")
 		}
-		elseBody, frame, err := parseCommand(frame.until(fiIdx))
+		elseBody, frame, err := parseCommand(frame)
 		if err != nil {
-			return nil, frame, err.extend(frame, "")
+			return nil, frame, err.extend(frame, "parsing else body")
+		}
+		ok, frame = parseExact("}", skipWhiteSpaces(frame))
+		if !ok {
+			return nil, frame, newParserError(frame, "} expected")
 		}
 		return &ifNode{condition, body, elseBody}, frame, nil
 	case "elif":
