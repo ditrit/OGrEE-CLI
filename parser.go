@@ -268,7 +268,7 @@ func parseWord(frame Frame) (string, Frame, *ParserError) {
 	l := lexerFromFrame(frame)
 	tok := l.nextToken(lexExpr)
 	if tok.t != tokWord {
-		return "", frame, newParserError(frame.empty(), "word expected")
+		return "", frame, newParserError(frame, "word expected")
 	}
 	return tok.str, frame.from(tok.end), nil
 }
@@ -278,7 +278,6 @@ func parseSeparatedStuff(
 	frame Frame,
 	parseStuff func(Frame) (any, Frame, *ParserError),
 ) ([]any, *ParserError) {
-	topFrame := frame
 	items := []any{}
 
 	for {
@@ -286,7 +285,7 @@ func parseSeparatedStuff(
 		var err *ParserError
 		item, frame, err = parseStuff(frame)
 		if err != nil {
-			return nil, err.extend(topFrame, "parsing list of words")
+			return nil, err.extend(frame, "parsing item in list")
 		}
 		items = append(items, item)
 		frame = skipWhiteSpaces(frame)
@@ -294,8 +293,7 @@ func parseSeparatedStuff(
 			return items, nil
 		}
 		if frame.first() != sep {
-			return nil, newParserError(frame, string(sep)+" expected").
-				extend(topFrame, "parsing list of words")
+			return nil, newParserError(frame, string(sep)+" expected")
 		}
 		frame = skipWhiteSpaces(frame.forward(1))
 	}
@@ -307,7 +305,7 @@ func parseSeparatedWords(sep byte, frame Frame) ([]string, *ParserError) {
 	}
 	wordsAny, err := parseSeparatedStuff(sep, frame, parseFunc)
 	if err != nil {
-		return nil, err.extendMessage("parsing list of words")
+		return nil, err.extend(frame, "parsing list of words")
 	}
 	words := []string{}
 	for _, wordAny := range wordsAny {
@@ -322,7 +320,7 @@ func parseSeparatedPaths(sep byte, frame Frame) ([]node, *ParserError) {
 	}
 	pathsAny, err := parseSeparatedStuff(sep, frame, parseFunc)
 	if err != nil {
-		return nil, err.extendMessage("parsing list of paths")
+		return nil, err.extend(frame, "parsing list of paths")
 	}
 	paths := []node{}
 	for _, pathAny := range pathsAny {
@@ -598,7 +596,7 @@ func parseAssign(frame Frame) (string, Frame, *ParserError) {
 	}
 	frame = skipWhiteSpaces(frame)
 	if frame.first() != '=' {
-		return "", frame, newParserError(skipWhiteSpaces(frame).empty(), "= expected")
+		return "", frame, newParserError(skipWhiteSpaces(frame), "= expected")
 	}
 	return varName, frame.forward(1), nil
 }
@@ -643,7 +641,7 @@ func parseSingleArg(allowedArgs []string, allowedFlags []string, frame Frame) (
 	arg, frame, err := parseWord(frame)
 	if err != nil {
 		return "", "", frame, err.extendMessage("parsing arg name").
-			extend(topFrame.empty(), "parsing argument")
+			extend(topFrame, "parsing argument")
 	}
 	frame = skipWhiteSpaces(frame)
 	var value string
@@ -1106,7 +1104,7 @@ func parseWhile(frame Frame) (node, Frame, *ParserError) {
 	}
 	ok, frame := parseExact("{", frame)
 	if !ok {
-		return nil, frame, newParserError(frame.empty(), "{ expected")
+		return nil, frame, newParserError(frame, "{ expected")
 	}
 	body, frame, err := parseCommand(frame)
 	if err != nil {
@@ -1114,7 +1112,7 @@ func parseWhile(frame Frame) (node, Frame, *ParserError) {
 	}
 	ok, frame = parseExact("}", skipWhiteSpaces(frame))
 	if !ok {
-		return nil, frame, newParserError(frame.empty(), "} expected")
+		return nil, frame, newParserError(frame, "} expected")
 	}
 	return &whileNode{condition, body}, frame, nil
 }
@@ -1126,7 +1124,7 @@ func parseFor(frame Frame) (node, Frame, *ParserError) {
 	}
 	ok, frame := parseExact("in", skipWhiteSpaces(frame))
 	if !ok {
-		return nil, frame, newParserError(frame.empty(), "\"in\" expected")
+		return nil, frame, newParserError(frame, "\"in\" expected")
 	}
 	start, frame, err := parseExpr(frame)
 	if err != nil {
@@ -1134,7 +1132,7 @@ func parseFor(frame Frame) (node, Frame, *ParserError) {
 	}
 	ok, frame = parseExact("..", frame)
 	if !ok {
-		return nil, frame, newParserError(frame.empty(), ".. expected")
+		return nil, frame, newParserError(frame, ".. expected")
 	}
 	end, frame, err := parseExpr(frame)
 	if err != nil {
@@ -1142,7 +1140,7 @@ func parseFor(frame Frame) (node, Frame, *ParserError) {
 	}
 	ok, frame = parseExact("{", frame)
 	if !ok {
-		return nil, frame, newParserError(frame.empty(), "{ expected")
+		return nil, frame, newParserError(frame, "{ expected")
 	}
 	body, frame, err := parseCommand(frame)
 	if err != nil {
@@ -1150,7 +1148,7 @@ func parseFor(frame Frame) (node, Frame, *ParserError) {
 	}
 	ok, frame = parseExact("}", skipWhiteSpaces(frame))
 	if !ok {
-		return nil, frame, newParserError(frame.empty(), "} expected")
+		return nil, frame, newParserError(frame, "} expected")
 	}
 	return &forRangeNode{varName, start, end, body}, frame, nil
 }
@@ -1251,7 +1249,7 @@ func parseCreate(frame Frame) (node, Frame, *ParserError) {
 		return parseCreateOrphan(frame)
 	}
 	if frame.first() != ':' {
-		return nil, frame, newParserError(frame.empty(), ": expected")
+		return nil, frame, newParserError(frame, ": expected")
 	}
 	frame = skipWhiteSpaces(frame.forward(1))
 	return createObjDispatch[objType](frame)
@@ -1265,7 +1263,7 @@ func parseColor(frame Frame) (node, Frame, *ParserError) {
 	}
 	color, newFrame, err := parseExpr(frame)
 	if err != nil {
-		return nil, frame, newParserError(frame.empty(), "color expected")
+		return nil, frame, newParserError(frame, "color expected")
 	}
 	return color, newFrame, nil
 }
@@ -1277,7 +1275,7 @@ func parseKeyWordOrExpr(keywords []string, frame Frame) (node, Frame, *ParserErr
 	}
 	expr, newFrame, err := parseExpr(frame)
 	if err != nil {
-		return nil, frame, newParserError(frame.empty(), "keyword or expr expected")
+		return nil, frame, newParserError(frame, "keyword or expr expected")
 	}
 	return expr, newFrame, nil
 }
@@ -1328,7 +1326,7 @@ func parseObjectParams(sig []objParam, startWithAt bool, frame Frame) (map[strin
 		if i != 0 || startWithAt {
 			ok, nextFrame := parseExact("@", frame)
 			if !ok {
-				return nil, frame, newParserError(frame.empty(), "@ expected")
+				return nil, frame, newParserError(frame, "@ expected")
 			}
 			frame = nextFrame
 		}
@@ -1462,7 +1460,7 @@ func parseCreateGroup(frame Frame) (node, Frame, *ParserError) {
 	}
 	ok, frame := parseExact("@", frame)
 	if !ok {
-		return nil, frame, newParserError(frame.empty(), "@ expected")
+		return nil, frame, newParserError(frame, "@ expected")
 	}
 	childs, frame, err := parsePathGroup(frame)
 	if err != nil {
@@ -1478,7 +1476,7 @@ func parseCreateCorridor(frame Frame) (node, Frame, *ParserError) {
 	}
 	ok, frame := parseExact("@", frame)
 	if !ok {
-		return nil, frame, newParserError(frame.empty(), "@ expected")
+		return nil, frame, newParserError(frame, "@ expected")
 	}
 	racks, frame, err := parsePathGroup(frame)
 	if err != nil {
@@ -1489,7 +1487,7 @@ func parseCreateCorridor(frame Frame) (node, Frame, *ParserError) {
 	}
 	ok, frame = parseExact("@", frame)
 	if !ok {
-		return nil, frame, newParserError(frame.empty(), "@ expected")
+		return nil, frame, newParserError(frame, "@ expected")
 	}
 	temperature, frame, err := parseTemperature(frame)
 	if err != nil {
@@ -1516,7 +1514,7 @@ func parseCreateOrphan(frame Frame) (node, Frame, *ParserError) {
 
 func parseCreateOrphanAux(frame Frame, sensor bool) (node, Frame, *ParserError) {
 	if frame.first() != ':' {
-		return nil, frame, newParserError(frame.empty(), ": expected")
+		return nil, frame, newParserError(frame, ": expected")
 	}
 	frame = skipWhiteSpaces(frame.forward(1))
 	path, frame, err := parsePath(frame)
@@ -1525,7 +1523,7 @@ func parseCreateOrphanAux(frame Frame, sensor bool) (node, Frame, *ParserError) 
 	}
 	ok, frame := parseExact("@", frame)
 	if !ok {
-		return nil, frame, newParserError(frame.empty(), "@ expected")
+		return nil, frame, newParserError(frame, "@ expected")
 	}
 	template, frame, err := parseStringExpr(frame)
 	if err != nil {
@@ -1542,7 +1540,7 @@ func parseUpdate(frame Frame) (node, Frame, *ParserError) {
 	frame = skipWhiteSpaces(frame)
 	ok, frame := parseExact(":", frame)
 	if !ok {
-		return nil, frame, newParserError(frame.empty(), ": expected")
+		return nil, frame, newParserError(frame, ": expected")
 	}
 	attr, frame, err := parseAssign(frame)
 	if err != nil {
