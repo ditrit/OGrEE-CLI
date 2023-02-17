@@ -1100,19 +1100,21 @@ func parseFocus(frame Frame) (node, Frame, *ParserError) {
 }
 
 func parseWhile(frame Frame) (node, Frame, *ParserError) {
-	if frame.first() != '(' {
-		return nil, frame, newParserError(frame.empty(), "( expected")
-	}
-	condition, frame, err := parseExpr(frame.from(frame.start + 1))
-	if condition != nil {
+	condition, frame, err := parseExpr(frame)
+	if err != nil {
 		return nil, frame, err.extendMessage("parsing condition")
 	}
-	if frame.first() != ')' {
-		return nil, frame, newParserError(frame.empty(), ") expected")
+	ok, frame := parseExact("{", frame)
+	if !ok {
+		return nil, frame, newParserError(frame.empty(), "{ expected")
 	}
-	body, frame, err := parseCommand(frame.forward(1))
+	body, frame, err := parseCommand(frame)
 	if err != nil {
 		return nil, frame, err.extendMessage("parsing while body")
+	}
+	ok, frame = parseExact("}", skipWhiteSpaces(frame))
+	if !ok {
+		return nil, frame, newParserError(frame.empty(), "} expected")
 	}
 	return &whileNode{condition, body}, frame, nil
 }
@@ -1126,10 +1128,6 @@ func parseFor(frame Frame) (node, Frame, *ParserError) {
 	if !ok {
 		return nil, frame, newParserError(frame.empty(), "\"in\" expected")
 	}
-	ok, frame = parseExact("{", skipWhiteSpaces(frame))
-	if !ok {
-		return nil, frame, newParserError(frame.empty(), "{ expected")
-	}
 	start, frame, err := parseExpr(frame)
 	if err != nil {
 		return nil, frame, err.extendMessage("parsing for loop start index")
@@ -1142,13 +1140,17 @@ func parseFor(frame Frame) (node, Frame, *ParserError) {
 	if err != nil {
 		return nil, frame, err.extendMessage("parsing for loop end index")
 	}
-	ok, frame = parseExact("}", frame)
+	ok, frame = parseExact("{", frame)
 	if !ok {
 		return nil, frame, newParserError(frame.empty(), "{ expected")
 	}
 	body, frame, err := parseCommand(frame)
 	if err != nil {
 		return nil, frame, err.extendMessage("parsing for loop body")
+	}
+	ok, frame = parseExact("}", skipWhiteSpaces(frame))
+	if !ok {
+		return nil, frame, newParserError(frame.empty(), "} expected")
 	}
 	return &forRangeNode{varName, start, end, body}, frame, nil
 }

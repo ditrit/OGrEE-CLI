@@ -159,6 +159,15 @@ func TestParseExprRange(t *testing.T) {
 	}
 }
 
+func TestParseExprCompare(t *testing.T) {
+	frame := newFrame("$i<6 {print \"a\"}")
+	expr, _, _ := parseExpr(frame)
+	expected := &comparatorNode{"<", &symbolReferenceNode{"i"}, &intLeaf{6}}
+	if !reflect.DeepEqual(expr, expected) {
+		t.Errorf("unexpected expression : \n%s", spew.Sdump(expr))
+	}
+}
+
 func TestParseExprString(t *testing.T) {
 	frame := newFrame("\"${a}test\"")
 	expr, _, err := parseExpr(frame)
@@ -324,6 +333,7 @@ var commandsMatching = map[string]node{
 	"camera.wait=15":                                       &cameraWaitNode{15.},
 	"clear":                                                &clrNode{},
 	".cmds:${CUST}/DEMO.PERF.ocli":                         &loadNode{&formatStringNode{"%v/DEMO.PERF.ocli", []symbolReferenceNode{{"CUST"}}}},
+	"while $i<6 {print \"a\"}":                             &whileNode{&comparatorNode{"<", &symbolReferenceNode{"i"}, &intLeaf{6}}, &printNode{&strLeaf{"a"}}},
 }
 
 func TestSimpleCommands(t *testing.T) {
