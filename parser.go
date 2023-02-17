@@ -4,7 +4,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"unicode"
 )
 
 var commandDispatch map[string]func(frame Frame) (node, Frame, *ParserError)
@@ -1430,7 +1429,7 @@ func parseCreateRack(frame Frame) (node, Frame, *ParserError) {
 }
 
 func parseCreateDevice(frame Frame) (node, Frame, *ParserError) {
-	sig := []objParam{{"path", "path"}, {"posUOrSlot", "expr"}, {"sizeUOrTemplate", "stringexpr"}}
+	sig := []objParam{{"path", "path"}, {"posUOrSlot", "stringexpr"}, {"sizeUOrTemplate", "stringexpr"}}
 	params1, frame, err := parseObjectParams(sig, false, frame)
 	if err != nil {
 		return nil, frame, err.extendMessage("parsing device parameters")
@@ -1619,15 +1618,6 @@ func parseCommand(frame Frame) (node, Frame, *ParserError) {
 	}
 }
 
-func firstNonAscii(frame Frame) int {
-	for i := frame.start; i < frame.end; i++ {
-		if frame.char(i) > unicode.MaxASCII {
-			return i
-		}
-	}
-	return frame.end
-}
-
 func Parse(buffer string) (node, *ParserError) {
 	commandDispatch = map[string]func(frame Frame) (node, Frame, *ParserError){
 		"ls":         parseLs,
@@ -1696,13 +1686,13 @@ func Parse(buffer string) (node, *ParserError) {
 		buffer = buffer[:commentIdx]
 	}
 	frame := newFrame(buffer)
-	firstNonAsciiIdx := firstNonAscii(frame)
-	if firstNonAsciiIdx < frame.end {
-		return nil, newParserError(
-			frame.new(firstNonAsciiIdx, firstNonAsciiIdx+1),
-			"command should only contain ascii characters",
-		)
-	}
+	// firstNonAsciiIdx := firstNonAscii(frame)
+	// if firstNonAsciiIdx < frame.end {
+	// 	return nil, newParserError(
+	// 		frame.new(firstNonAsciiIdx, firstNonAsciiIdx+1),
+	// 		"command should only contain ascii characters",
+	// 	)
+	// }
 	node, frame, err := parseCommand(frame)
 	if err != nil {
 		return nil, err

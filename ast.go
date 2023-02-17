@@ -1593,8 +1593,8 @@ func parseAreas(areas map[string]interface{}) (map[string]interface{}, error) {
 	var reservedStr string
 	var techStr string
 
-	if reserved, ok := areas["reserved"].([]interface{}); ok {
-		if tech, ok := areas["technical"].([]interface{}); ok {
+	if reserved, ok := areas["reserved"].([]float64); ok {
+		if tech, ok := areas["technical"].([]float64); ok {
 			if len(reserved) == 4 && len(tech) == 4 {
 				var r [4]*bytes.Buffer
 				var t [4]*bytes.Buffer
