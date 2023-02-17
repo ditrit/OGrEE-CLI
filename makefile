@@ -17,13 +17,13 @@ main:
 	-X cli/controllers.GitCommitDate=$(GITHASHDATE)"
 
 #OTHER PLATFORM COMPILATION BLOCK
-mac: $(FILEDEPS)
+mac: 
 	GOOS=darwin go build \-ldflags="-X  cli/controllers.BuildHash=$(GITHASH) \
 	-X cli/controllers.BuildTree=$(GITBRANCH) \
 	-X cli/controllers.BuildTime=$(DATE) \
 	-X cli/controllers.GitCommitDate=$(GITHASHDATE)"
 	
-win: $(FILEDEPS)
+win: 
 	GOOS=windows go build \-ldflags="-X  cli/controllers.BuildHash=$(GITHASH) \
 	-X cli/controllers.BuildTree=$(GITBRANCH) \
 	-X cli/controllers.BuildTime=$(DATE) \
