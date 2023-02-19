@@ -29,7 +29,7 @@ func (n pathNode) getStr() (string, error) {
 	}
 	p, ok := val.(string)
 	if !ok {
-		return "", fmt.Errorf("Path should be a string")
+		return "", fmt.Errorf("path should be a string")
 	}
 	if p == "_" {
 		return "_", nil
@@ -38,7 +38,6 @@ func (n pathNode) getStr() (string, error) {
 	if p[0] != '/' {
 		output_words = strings.Split(cmd.State.CurrPath, "/")[1:]
 	} else {
-		output_words = []string{"Physical"}
 		p = p[1:]
 	}
 	input_words := strings.Split(p, "/")
@@ -52,6 +51,11 @@ func (n pathNode) getStr() (string, error) {
 		} else {
 			output_words = append(output_words, word)
 		}
+	}
+	if output_words[0] == "P" {
+		output_words[0] = "Physical"
+	} else if output_words[0] == "L" {
+		output_words[0] = "Logical"
 	}
 	r := "/" + strings.Join(output_words, "/")
 	return path.Clean(r), nil
