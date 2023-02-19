@@ -118,10 +118,6 @@ func (frame Frame) from(start int) Frame {
 	return frame.new(start, frame.end)
 }
 
-func (frame Frame) empty() Frame {
-	return frame.until(frame.start)
-}
-
 func (frame Frame) str() string {
 	return frame.buf[frame.start:frame.end]
 }
@@ -158,21 +154,6 @@ func skipWhiteSpaces(frame Frame) Frame {
 		i += 1
 	}
 	return frame.from(i)
-}
-
-func findKeyword(keyword string, frame Frame) int {
-	inStr := false
-	for startPos := frame.start; startPos <= frame.end-len(keyword); startPos++ {
-		c := frame.char(startPos)
-		if c == '"' {
-			inStr = !inStr
-			continue
-		}
-		if !inStr && frame.new(startPos, startPos+len(keyword)).str() == keyword {
-			return startPos
-		}
-	}
-	return frame.end
 }
 
 func findNext(substring string, frame Frame) int {
