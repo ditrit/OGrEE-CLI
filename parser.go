@@ -200,7 +200,7 @@ func findClosing(frame Frame) int {
 
 func frameEnd(frame Frame) bool {
 	frame = skipWhiteSpaces(frame)
-	return frame.start == frame.end || frame.first() == ';'
+	return frame.start == frame.end || frame.first() == ';' || frame.first() == '}'
 }
 
 func parseExact(word string, frame Frame) (bool, Frame) {
@@ -1281,10 +1281,10 @@ type objParam struct {
 	t    string
 }
 
-func parseObjectParams(sig []objParam, startWithAt bool, frame Frame) (map[string]node, Frame, *ParserError) {
+func parseObjectParams(sig []objParam, frame Frame) (map[string]node, Frame, *ParserError) {
 	values := map[string]node{}
 	for i, param := range sig {
-		if i != 0 || startWithAt {
+		if i != 0 {
 			ok, nextFrame := parseExact("@", frame)
 			if !ok {
 				return nil, frame, newParserError(frame, "@ expected")
@@ -1321,7 +1321,7 @@ func parseObjectParams(sig []objParam, startWithAt bool, frame Frame) (map[strin
 
 func parseCreateTenant(frame Frame) (node, Frame, *ParserError) {
 	sig := []objParam{{"path", "path"}, {"color", "color"}}
-	params, frame, err := parseObjectParams(sig, false, frame)
+	params, frame, err := parseObjectParams(sig, frame)
 	if err != nil {
 		return nil, frame, err.extendMessage("parsing tenant parameters")
 	}
@@ -1330,7 +1330,7 @@ func parseCreateTenant(frame Frame) (node, Frame, *ParserError) {
 
 func parseCreateSite(frame Frame) (node, Frame, *ParserError) {
 	sig := []objParam{{"path", "path"}}
-	params, frame, err := parseObjectParams(sig, false, frame)
+	params, frame, err := parseObjectParams(sig, frame)
 	if err != nil {
 		return nil, frame, err.extendMessage("parsing site parameters")
 	}
@@ -1339,7 +1339,7 @@ func parseCreateSite(frame Frame) (node, Frame, *ParserError) {
 
 func parseCreateBuilding(frame Frame) (node, Frame, *ParserError) {
 	sig := []objParam{{"path", "path"}, {"posXY", "expr"}, {"rotation", "expr"}, {"sizeOrTemplate", "stringexpr"}}
-	params, frame, err := parseObjectParams(sig, false, frame)
+	params, frame, err := parseObjectParams(sig, frame)
 	if err != nil {
 		return nil, frame, err.extendMessage("parsing building parameters")
 	}
@@ -1348,11 +1348,12 @@ func parseCreateBuilding(frame Frame) (node, Frame, *ParserError) {
 
 func parseCreateRoom(frame Frame) (node, Frame, *ParserError) {
 	sig := []objParam{{"path", "path"}, {"posXY", "expr"}, {"rotation", "expr"}, {"sizeOrTemplate", "stringexpr"}}
-	params1, frame, err := parseObjectParams(sig, false, frame)
+	params1, frame, err := parseObjectParams(sig, frame)
 	if err != nil {
 		return nil, frame, err.extendMessage("parsing room parameters")
 	}
-	if frameEnd(frame) {
+	ok, frame := parseExact("@", frame)
+	if !ok {
 		return &createRoomNode{
 			params1["path"],
 			params1["posXY"],
@@ -1361,11 +1362,12 @@ func parseCreateRoom(frame Frame) (node, Frame, *ParserError) {
 			params1["sizeOrTemplate"]}, frame, nil
 	}
 	sig = []objParam{{"axisOrientation", "axisOrientation"}}
-	params2, frame, err := parseObjectParams(sig, true, frame)
+	params2, frame, err := parseObjectParams(sig, frame)
 	if err != nil {
 		return nil, frame, err.extendMessage("parsing room parameters")
 	}
-	if frameEnd(frame) {
+	ok, frame = parseExact("@", frame)
+	if !ok {
 		return &createRoomNode{
 			params1["path"],
 			params1["posXY"],
@@ -1374,7 +1376,7 @@ func parseCreateRoom(frame Frame) (node, Frame, *ParserError) {
 			params2["axisOrientation"], nil, nil}, frame, nil
 	}
 	sig = []objParam{{"floorUnit", "floorUnit"}}
-	params3, frame, err := parseObjectParams(sig, true, frame)
+	params3, frame, err := parseObjectParams(sig, frame)
 	if err != nil {
 		return nil, frame, err.extendMessage("parsing room parameters")
 	}
@@ -1390,7 +1392,7 @@ func parseCreateRoom(frame Frame) (node, Frame, *ParserError) {
 func parseCreateRack(frame Frame) (node, Frame, *ParserError) {
 	sig := []objParam{{"path", "path"}, {"pos", "expr"},
 		{"sizeOrTemplate", "stringexpr"}, {"orientation", "rackOrientation"}}
-	params, frame, err := parseObjectParams(sig, false, frame)
+	params, frame, err := parseObjectParams(sig, frame)
 	if err != nil {
 		return nil, frame, err.extendMessage("parsing rack parameters")
 	}
@@ -1399,15 +1401,16 @@ func parseCreateRack(frame Frame) (node, Frame, *ParserError) {
 
 func parseCreateDevice(frame Frame) (node, Frame, *ParserError) {
 	sig := []objParam{{"path", "path"}, {"posUOrSlot", "stringexpr"}, {"sizeUOrTemplate", "stringexpr"}}
-	params1, frame, err := parseObjectParams(sig, false, frame)
+	params1, frame, err := parseObjectParams(sig, frame)
 	if err != nil {
 		return nil, frame, err.extendMessage("parsing device parameters")
 	}
-	if frameEnd(frame) {
+	ok, frame := parseExact("@", frame)
+	if !ok {
 		return &createDeviceNode{params1["path"], params1["posUOrSlot"], params1["sizeUOrTemplate"], nil}, frame, nil
 	}
 	sig = []objParam{{"side", "side"}}
-	params2, frame, err := parseObjectParams(sig, true, frame)
+	params2, frame, err := parseObjectParams(sig, frame)
 	if err != nil {
 		return nil, frame, err.extendMessage("parsing device parameters")
 	}

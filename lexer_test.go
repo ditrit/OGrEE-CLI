@@ -1,34 +1,42 @@
 package main
 
 import (
+	"fmt"
 	"testing"
 )
 
-func checkTokSequence(expected []tokenType, str string, t *testing.T) {
+func checkTokSequence(lexFunc stateFn, expectedTypes []tokenType, expectedVals []any, str string, t *testing.T) {
 	l := newLexer(str, 0, len(str))
-	for i := 0; i < len(expected); i++ {
-		tok := l.nextToken(lexExpr)
-		if tok.t != expected[i] {
-			t.Errorf("Unexpected token : %s instead of %s", tok.t.String(), expected[i].String())
+	for i := 0; i < len(expectedTypes); i++ {
+		tok := l.nextToken(lexFunc)
+		fmt.Printf("%s, %s, %v\n", tok.t.String(), tok.str, tok.val)
+		if tok.t != expectedTypes[i] {
+			t.Errorf("Unexpected token : %s when %s was expected", tok.t.String(), expectedTypes[i].String())
+		}
+		if tok.val != expectedVals[i] {
+			t.Errorf("Unexpected token value : %v when %v was expected", tok.val, expectedVals[i])
 		}
 	}
 }
 
 func TestLex(t *testing.T) {
 	str := "false42 + (3 - 4) * plouf42 + \"plouf\" || false"
-	expected := []tokenType{tokWord, tokAdd, tokLeftParen, tokInt, tokSub, tokInt, tokRightParen,
+	expectedTypes := []tokenType{tokWord, tokAdd, tokLeftParen, tokInt, tokSub, tokInt, tokRightParen,
 		tokMul, tokWord, tokAdd, tokString, tokOr, tokBool, tokEOF}
-	checkTokSequence(expected, str, t)
+	expectedVals := []any{nil, nil, nil, 3, nil, 4, nil, nil, nil, nil, "plouf", nil, false, nil}
+	checkTokSequence(lexExpr, expectedTypes, expectedVals, str, t)
 }
 
 func TestLexDoubleDot(t *testing.T) {
 	str := "42.."
-	expected := []tokenType{tokInt, tokEOF}
-	checkTokSequence(expected, str, t)
+	expectedTypes := []tokenType{tokInt, tokEOF}
+	expectedVals := []any{42, nil}
+	checkTokSequence(lexExpr, expectedTypes, expectedVals, str, t)
 }
 
 func TestLexFormattedString(t *testing.T) {
 	str := "${a}a$ab"
-	expected := []tokenType{tokDeref, tokWord, tokDeref}
-	checkTokSequence(expected, str, t)
+	expectedTypes := []tokenType{tokDeref, tokText, tokDeref, tokEOF}
+	expectedVals := []any{"a", nil, "ab", nil}
+	checkTokSequence(lexUnquotedString, expectedTypes, expectedVals, str, t)
 }

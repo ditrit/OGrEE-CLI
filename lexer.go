@@ -384,17 +384,19 @@ func lexColor(l *lexer) stateFn {
 
 func lexText(l *lexer, endCharacters string, caller stateFn) stateFn {
 	c := l.next()
-	if c == eof || strings.Contains(endCharacters, string(c)) {
-		l.backup()
-		if l.pos == l.start {
-			return l.emit(tokEOF, nil)
-		}
-		return l.emit(tokText, nil)
-	}
 	if c == '$' {
 		return lexDeref
 	}
-	return caller
+	for {
+		if c == eof || strings.Contains(endCharacters+"$", string(c)) {
+			l.backup()
+			if l.pos == l.start {
+				return l.emit(tokEOF, nil)
+			}
+			return l.emit(tokText, nil)
+		}
+		c = l.next()
+	}
 }
 
 func lexUnquotedString(l *lexer) stateFn {
