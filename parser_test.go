@@ -365,3 +365,11 @@ func TestSequence(t *testing.T) {
 		}
 	}
 }
+
+func TestFor(t *testing.T) {
+	for simpleCommand, tree := range commandsMatching {
+		command := "for i in 0..42 { " + simpleCommand + " }"
+		expected := &forRangeNode{"i", &intLeaf{0}, &intLeaf{42}, tree}
+		testCommand(command, expected, t)
+	}
+}
