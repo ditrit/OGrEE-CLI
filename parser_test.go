@@ -197,7 +197,10 @@ func TestParseExprArrayRef(t *testing.T) {
 
 func TestParseRawText(t *testing.T) {
 	frame := newFrame("${a}a")
-	expr, _ := parseRawText(frame)
+	expr, _, err := parseRawText(lexUnquotedString, frame)
+	if err != nil {
+		t.Errorf("error while parsing : %s", err.Error())
+	}
 	expected := &formatStringNode{"%va", []symbolReferenceNode{{"a"}}}
 	if !reflect.DeepEqual(expr, expected) {
 		t.Errorf("unexpected expression : \n%s", spew.Sdump(expr))
@@ -273,15 +276,15 @@ func vec4(x float64, y float64, z float64, w float64) node {
 }
 
 var commandsMatching = map[string]node{
-	"ls":                             &lsNode{&pathNode{&strLeaf{"."}}},
+	"ls":                             &lsNode{&pathNode{&strLeaf{""}}},
 	"get ${toto}/tata":               &getObjectNode{testPath},
 	"getu rackA 42":                  &getUNode{&pathNode{&strLeaf{"rackA"}}, &intLeaf{42}},
 	"undraw":                         &undrawNode{nil},
 	"undraw ${toto}/tata":            &undrawNode{testPath},
-	"draw":                           &drawNode{&pathNode{&strLeaf{"."}}, 0, false},
+	"draw":                           &drawNode{&pathNode{&strLeaf{""}}, 0, false},
 	"draw ${toto}/tata":              &drawNode{testPath, 0, false},
 	"draw ${toto}/tata 4":            &drawNode{testPath, 4, false},
-	"draw -f":                        &drawNode{&pathNode{&strLeaf{"."}}, 0, true},
+	"draw -f":                        &drawNode{&pathNode{&strLeaf{""}}, 0, true},
 	"draw -f ${toto}/tata":           &drawNode{testPath, 0, true},
 	"draw -f ${toto}/tata 4 ":        &drawNode{testPath, 4, true},
 	".cmds:../toto/tata.ocli":        &loadNode{&strLeaf{"../toto/tata.ocli"}},

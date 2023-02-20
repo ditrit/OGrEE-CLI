@@ -164,23 +164,8 @@ func findNext(substring string, frame Frame) int {
 	return frame.end
 }
 
-func findNextAmong(substringList []string, frame Frame) int {
-	firstIdx := -1
-	for _, substring := range substringList {
-		idx := findNext(substring, frame)
-		if idx < firstIdx || firstIdx == -1 {
-			firstIdx = idx
-		}
-	}
-	return firstIdx
-}
-
 func findNextQuote(frame Frame) int {
-	idx := strings.Index(frame.str(), "\"")
-	if idx == -1 {
-		return frame.end
-	}
-	return frame.start + idx
+	return findNext("\"", frame)
 }
 
 func findClosing(frame Frame) int {
@@ -295,21 +280,6 @@ func parseSeparatedWords(sep byte, frame Frame) ([]string, *ParserError) {
 	return words, nil
 }
 
-func parseSeparatedPaths(sep byte, frame Frame) ([]node, *ParserError) {
-	parseFunc := func(frame Frame) (any, Frame, *ParserError) {
-		return parsePath(frame)
-	}
-	pathsAny, err := parseSeparatedStuff(sep, frame, parseFunc)
-	if err != nil {
-		return nil, err.extend(frame, "parsing list of paths")
-	}
-	paths := []node{}
-	for _, pathAny := range pathsAny {
-		paths = append(paths, pathAny.(node))
-	}
-	return paths, nil
-}
-
 func charIsNumber(char byte) bool {
 	return char >= 48 && char <= 57
 }
@@ -365,13 +335,13 @@ func parseBool(frame Frame) (bool, Frame, *ParserError) {
 	return false, frame, newParserError(frame, "bool expected")
 }
 
-func parseRawText(frame Frame) (node, *ParserError) {
+func parseRawText(lexFunc stateFn, frame Frame) (node, Frame, *ParserError) {
 	l := lexerFromFrame(frame)
 	s := ""
 	vars := []symbolReferenceNode{}
 loop:
 	for {
-		tok := l.nextToken(lexFormattedString)
+		tok := l.nextToken(lexFunc)
 		switch tok.t {
 		case tokText:
 			s += tok.str
@@ -381,41 +351,52 @@ loop:
 		case tokEOF:
 			break loop
 		default:
-			return nil, newParserError(frame, "unexpected token")
+			return nil, frame, newParserError(frame, "unexpected token")
 		}
 	}
+	frame = frame.from(l.tok.end)
 	if len(vars) == 0 {
-		return &strLeaf{s}, nil
+		return &strLeaf{s}, frame, nil
 	}
-	return &formatStringNode{s, vars}, nil
+	return &formatStringNode{s, vars}, frame, nil
 }
 
 func parsePath(frame Frame) (node, Frame, *ParserError) {
 	frame = skipWhiteSpaces(frame)
-	endPath := findNextAmong([]string{" ", "@", ",", ":", ";"}, frame)
-	if frame.start == endPath {
-		return &pathNode{&strLeaf{"."}}, frame, nil
-	}
-	path, err := parseRawText(frame.until(endPath))
+	path, frame, err := parseRawText(lexPath, frame)
 	if err != nil {
 		return nil, frame, err.extend(frame, "parsing path")
 	}
-	return &pathNode{path}, skipWhiteSpaces(frame.from(endPath)), nil
+	return &pathNode{path}, skipWhiteSpaces(frame), nil
 }
 
 func parsePathGroup(frame Frame) ([]node, Frame, *ParserError) {
-	if frame.first() != '{' {
+	var err *ParserError
+	var path node
+
+	ok, frame := parseExact("{", frame)
+	if !ok {
 		return nil, frame, newParserError(frame, "{ expected")
 	}
-	endBracket := findClosing(frame)
-	if endBracket == frame.end {
-		return nil, frame, newParserError(frame, "{ opened but never closed")
+	paths := []node{}
+	for {
+		frame = skipWhiteSpaces(frame)
+		path, frame, err = parsePath(frame)
+		if err != nil {
+			return nil, frame, err
+		}
+		paths = append(paths, path)
+		frame = skipWhiteSpaces(frame)
+		ok, frame = parseExact("}", frame)
+		if ok {
+			break
+		}
+		ok, frame = parseExact(",", frame)
+		if !ok {
+			return nil, frame, newParserError(frame, "comma expected")
+		}
 	}
-	paths, err := parseSeparatedPaths(',', frame.new(frame.start+1, endBracket))
-	if err != nil {
-		return nil, frame, err.extendMessage("parsing path group")
-	}
-	return paths, frame.from(endBracket + 1), nil
+	return paths, frame, nil
 }
 
 func exprError(l *lexer, message string) *ParserError {
@@ -438,7 +419,7 @@ func parsePrimaryExpr(l *lexer) (node, *ParserError) {
 	case tokFloat:
 		return &floatLeaf{tok.val.(float64)}, nil
 	case tokString:
-		n, err := parseRawText(newFrame(tok.val.(string)))
+		n, _, err := parseRawText(lexQuotedString, newFrame(tok.val.(string)))
 		if err != nil {
 			return nil, exprError(l, "cannot parse string")
 		}
@@ -1288,12 +1269,11 @@ func parseStringExpr(frame Frame) (node, Frame, *ParserError) {
 		return expr, nextFrame, nil
 	}
 	frame = skipWhiteSpaces(frame)
-	endStr := findNextAmong([]string{" ", "@", ",", ";"}, frame)
-	str, err := parseRawText(frame.until(endStr))
+	str, frame, err := parseRawText(lexUnquotedString, frame)
 	if err != nil {
 		return nil, frame, err.extend(frame, "parsing string expression")
 	}
-	return str, skipWhiteSpaces(frame.from(endStr)), nil
+	return str, skipWhiteSpaces(frame), nil
 }
 
 type objParam struct {
@@ -1464,7 +1444,7 @@ func parseCreateCorridor(frame Frame) (node, Frame, *ParserError) {
 		return nil, frame, err.extendMessage("parsing group childs")
 	}
 	if len(racks) != 2 {
-		return nil, frame, err.extendMessage("only 2 racks expected")
+		return nil, frame, newParserError(frame, "only 2 racks expected")
 	}
 	ok, frame = parseExact("@", frame)
 	if !ok {

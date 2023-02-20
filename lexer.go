@@ -382,15 +382,31 @@ func lexColor(l *lexer) stateFn {
 	return l.emit(tokColor, nil)
 }
 
-func lexFormattedString(l *lexer) stateFn {
+func lexText(l *lexer, endCharacters string, caller stateFn) stateFn {
 	c := l.next()
-	if c == eof {
+	if c == eof || strings.Contains(endCharacters, string(c)) {
+		l.backup()
+		if l.pos == l.start {
+			return l.emit(tokEOF, nil)
+		}
 		return l.emit(tokText, nil)
 	}
 	if c == '$' {
 		return lexDeref
 	}
-	return lexFormattedString
+	return caller
+}
+
+func lexUnquotedString(l *lexer) stateFn {
+	return lexText(l, " @;,}", lexUnquotedString)
+}
+
+func lexQuotedString(l *lexer) stateFn {
+	return lexText(l, "", lexQuotedString)
+}
+
+func lexPath(l *lexer) stateFn {
+	return lexText(l, " @;,}:", lexPath)
 }
 
 func (l *lexer) nextToken(state stateFn) token {

@@ -31,6 +31,9 @@ func (n pathNode) getStr() (string, error) {
 	if !ok {
 		return "", fmt.Errorf("path should be a string")
 	}
+	if p == "" {
+		p = "."
+	}
 	if p == "_" {
 		return "_", nil
 	}
