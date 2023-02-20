@@ -147,7 +147,10 @@ func (n *forRangeNode) execute() (interface{}, error) {
 	if !ok {
 		return nil, fmt.Errorf("end index should be an integer")
 	}
-	for i := start; i < end; i++ {
+	if start > end {
+		return nil, fmt.Errorf("start index should be lower than end index")
+	}
+	for i := start; i <= end; i++ {
 		_, err := (&assignNode{n.variable, &intLeaf{i}}).execute()
 		if err != nil {
 			return nil, err
