@@ -28,6 +28,12 @@ win:
 	-X cli/controllers.BuildTree=$(GITBRANCH) \
 	-X cli/controllers.BuildTime=$(DATE) \
 	-X cli/controllers.GitCommitDate=$(GITHASHDATE)"
-	
+
+docker:
+	docker build -t cli .
+
+rundocker:
+	docker run --network=host -it cli
+
 clean:
 	rm cli
