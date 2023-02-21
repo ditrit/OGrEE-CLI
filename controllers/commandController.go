@@ -1410,6 +1410,9 @@ func GetOCLIAtrributes(Path string, ent int, data map[string]interface{}) error 
 			} else {
 				attr["size"] = serialiseAttr2(attr, "size")
 			}
+
+			//Since template was not provided, set it empty
+			attr["template"] = ""
 		}
 
 		if attr["size"] == "" {
