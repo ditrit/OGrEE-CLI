@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"testing"
 )
 
@@ -9,7 +8,6 @@ func checkTokSequence(lexFunc stateFn, expectedTypes []tokenType, expectedVals [
 	l := newLexer(str, 0, len(str))
 	for i := 0; i < len(expectedTypes); i++ {
 		tok := l.nextToken(lexFunc)
-		fmt.Printf("%s, %s, %v\n", tok.t.String(), tok.str, tok.val)
 		if tok.t != expectedTypes[i] {
 			t.Errorf("Unexpected token : %s when %s was expected", tok.t.String(), expectedTypes[i].String())
 		}
