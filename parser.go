@@ -203,9 +203,17 @@ func findClosing(frame Frame) int {
 	return frame.end
 }
 
-func frameEnd(frame Frame) bool {
+func frameEnd(endChars string, frame Frame) bool {
 	frame = skipWhiteSpaces(frame)
-	return frame.start == frame.end || frame.first() == ';' || frame.first() == '}'
+	return frame.start == frame.end || strings.Contains(endChars, string(frame.first()))
+}
+
+func commandEnd(frame Frame) bool {
+	return frameEnd(";})", frame)
+}
+
+func exprEnd(frame Frame) bool {
+	return frameEnd(";})@", frame)
 }
 
 func parseExact(word string, frame Frame) (bool, Frame) {
@@ -261,7 +269,7 @@ func parseSeparatedStuff(
 		}
 		items = append(items, item)
 		frame = skipWhiteSpaces(frame)
-		if frameEnd(frame) {
+		if frame.start == frame.end {
 			return items, nil
 		}
 		if frame.first() != sep {
@@ -587,7 +595,7 @@ func parseIndexing(frame Frame) (node, Frame, *ParserError) {
 }
 
 func parseArgValue(frame Frame) (string, Frame, *ParserError) {
-	if frameEnd(frame) {
+	if commandEnd(frame) {
 		return "", frame, newParserError(frame, "argument value expected")
 	}
 	if frame.first() == '(' {
@@ -735,7 +743,7 @@ func parseGetSlot(frame Frame) (node, Frame, *ParserError) {
 }
 
 func parseUndraw(frame Frame) (node, Frame, *ParserError) {
-	if frameEnd(frame) {
+	if commandEnd(frame) {
 		return &undrawNode{nil}, frame, nil
 	}
 	path, frame, err := parsePath(frame)
@@ -756,7 +764,7 @@ func parseDraw(frame Frame) (node, Frame, *ParserError) {
 		return nil, frame, err.extendMessage("parsing draw path")
 	}
 	depth := 0
-	if !frameEnd(frame) {
+	if !commandEnd(frame) {
 		depth, frame, err = parseInt(frame)
 		if err != nil {
 			return nil, frame, err.extendMessage("parsing draw depth")
@@ -770,7 +778,7 @@ func parseDrawable(frame Frame) (node, Frame, *ParserError) {
 	if err != nil {
 		return nil, frame, err.extendMessage("parsing drawable path")
 	}
-	if frameEnd(frame) {
+	if commandEnd(frame) {
 		return &isEntityDrawableNode{path}, frame, nil
 	}
 	attrName, _, err := parseWord(frame)
@@ -785,7 +793,7 @@ func parseHc(frame Frame) (node, Frame, *ParserError) {
 	if err != nil {
 		return nil, frame, err.extendMessage("parsing hc path")
 	}
-	if frameEnd(frame) {
+	if commandEnd(frame) {
 		return &hierarchyNode{path, 1}, frame, nil
 	}
 	depth, frame, err := parseInt(frame)
@@ -826,7 +834,7 @@ func parseUnset(frame Frame) (node, Frame, *ParserError) {
 }
 
 func parseEnv(frame Frame) (node, Frame, *ParserError) {
-	if frameEnd(frame) {
+	if commandEnd(frame) {
 		return &envNode{}, frame, nil
 	}
 	arg, valueFrame, err := parseAssign(frame)
@@ -967,7 +975,7 @@ func parsePrint(frame Frame) (node, Frame, *ParserError) {
 }
 
 func parseMan(frame Frame) (node, Frame, *ParserError) {
-	if frameEnd(frame) {
+	if commandEnd(frame) {
 		return &helpNode{""}, frame, nil
 	}
 	endCommandName := findNext(" ", frame)
@@ -979,7 +987,7 @@ func parseMan(frame Frame) (node, Frame, *ParserError) {
 }
 
 func parseCd(frame Frame) (node, Frame, *ParserError) {
-	if frameEnd(frame) {
+	if commandEnd(frame) {
 		return &cdNode{strLeaf{"/"}}, frame, nil
 	}
 	path, frame, err := parsePath(frame)
@@ -990,14 +998,14 @@ func parseCd(frame Frame) (node, Frame, *ParserError) {
 }
 
 func parseTree(frame Frame) (node, Frame, *ParserError) {
-	if frameEnd(frame) {
+	if commandEnd(frame) {
 		return &treeNode{&pathNode{&strLeaf{"."}}, 0}, frame, nil
 	}
 	path, frame, err := parsePath(frame)
 	if err != nil {
 		return nil, frame, err.extendMessage("parsing tree path")
 	}
-	if frameEnd(frame) {
+	if commandEnd(frame) {
 		return &treeNode{path, 0}, frame, nil
 	}
 	u, frame, err := parseInt(frame)
@@ -1279,8 +1287,7 @@ func parseTemperature(frame Frame) (node, Frame, *ParserError) {
 
 func parseStringExpr(frame Frame) (node, Frame, *ParserError) {
 	expr, nextFrame, err := parseExpr(frame)
-	_, startsWithDeref := expr.(*symbolReferenceNode)
-	if err == nil && !startsWithDeref {
+	if err == nil && exprEnd(nextFrame) {
 		return expr, nextFrame, nil
 	}
 	frame = skipWhiteSpaces(frame)
@@ -1555,7 +1562,7 @@ func parseCommandKeyWord(frame Frame) (string, Frame) {
 
 func parseSingleCommand(frame Frame) (node, Frame, *ParserError) {
 	frame = skipWhiteSpaces(frame)
-	if frameEnd(frame) {
+	if commandEnd(frame) {
 		return nil, frame, nil
 	}
 	startFrame := frame

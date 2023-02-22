@@ -340,6 +340,7 @@ var commandsMatching = map[string]node{
 	"camera.wait=15":                                       &cameraWaitNode{15.},
 	"clear":                                                &clrNode{},
 	".cmds:${CUST}/DEMO.PERF.ocli":                         &loadNode{&formatStringNode{"%v/DEMO.PERF.ocli", []symbolReferenceNode{{"CUST"}}}},
+	".cmds:${a}/${b}.ocli":                                 &loadNode{&formatStringNode{"%v/%v.ocli", []symbolReferenceNode{{"a"}, {"b"}}}},
 	"while $i<6 {print \"a\"}":                             &whileNode{&comparatorNode{"<", &symbolReferenceNode{"i"}, &intLeaf{6}}, &printNode{&strLeaf{"a"}}},
 }
 

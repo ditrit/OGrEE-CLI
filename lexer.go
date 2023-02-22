@@ -400,7 +400,7 @@ func lexText(l *lexer, endCharacters string, caller stateFn) stateFn {
 }
 
 func lexUnquotedString(l *lexer) stateFn {
-	return lexText(l, " @;,}", lexUnquotedString)
+	return lexText(l, " @;,})", lexUnquotedString)
 }
 
 func lexQuotedString(l *lexer) stateFn {
@@ -408,7 +408,7 @@ func lexQuotedString(l *lexer) stateFn {
 }
 
 func lexPath(l *lexer) stateFn {
-	return lexText(l, " @;,}:", lexPath)
+	return lexText(l, " @;,}):", lexPath)
 }
 
 func (l *lexer) nextToken(state stateFn) token {
