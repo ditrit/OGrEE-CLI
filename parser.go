@@ -6,8 +6,10 @@ import (
 	"strings"
 )
 
-var commandDispatch map[string]func(frame Frame) (node, Frame, *ParserError)
-var createObjDispatch map[string]func(frame Frame) (node, Frame, *ParserError)
+type parseCommandFunc func(frame Frame) (node, Frame, *ParserError)
+
+var commandDispatch map[string]parseCommandFunc
+var createObjDispatch map[string]parseCommandFunc
 
 var lsCommands = []string{"lsten", "lssite", "lsbldg", "lsroom", "lsrack", "lsdev", "lsac",
 	"lspanel", "lscabinet", "lscorridor", "lssensor"}
@@ -224,10 +226,11 @@ func parseKeyWord(candidates []string, frame Frame) (string, Frame) {
 	for commandEnd < frame.end && isPrefix(frame.until(commandEnd+1).str(), candidates) {
 		commandEnd++
 	}
-	if commandEnd == frame.start {
-		return "", frame
+	longestPrefix := frame.until(commandEnd).str()
+	if sliceContains(candidates, longestPrefix) {
+		return longestPrefix, frame.from(commandEnd)
 	}
-	return frame.until(commandEnd).str(), frame.from(commandEnd)
+	return "", frame
 }
 
 func parseWord(frame Frame) (string, Frame, *ParserError) {
@@ -1158,7 +1161,7 @@ func parseIf(frame Frame) (node, Frame, *ParserError) {
 		}
 		return &ifNode{condition, body, elseBody}, frame, nil
 	default:
-		return nil, frame, newParserError(frame, "expected fi, else or elif")
+		panic("unexpected return from parseKeyWord : " + keyword)
 	}
 }
 
@@ -1568,6 +1571,70 @@ func parseSingleCommand(frame Frame) (node, Frame, *ParserError) {
 }
 
 func parseCommand(frame Frame) (node, Frame, *ParserError) {
+	if commandDispatch == nil {
+		commandDispatch = map[string]parseCommandFunc{
+			"ls":         parseLs,
+			"get":        parseGet,
+			"getu":       parseGetU,
+			"getslot":    parseGetSlot,
+			"undraw":     parseUndraw,
+			"draw":       parseDraw,
+			"drawable":   parseDrawable,
+			"hc":         parseHc,
+			"unset":      parseUnset,
+			"env":        parseEnv,
+			"+":          parseCreate,
+			"-":          parseDelete,
+			"=":          parseEqual,
+			".var:":      parseVar,
+			".cmds:":     parseLoad,
+			".template:": parseTemplate,
+			"len":        parseLen,
+			"link:":      parseLink,
+			"unlink":     parseUnlink,
+			"print":      parsePrint,
+			"man":        parseMan,
+			"cd":         parseCd,
+			"tree":       parseTree,
+			"ui.":        parseUi,
+			"camera.":    parseCamera,
+			">":          parseFocus,
+			"while":      parseWhile,
+			"for":        parseFor,
+			"if":         parseIf,
+			"alias":      parseAlias,
+		}
+		createObjDispatch = map[string]parseCommandFunc{
+			"tenant":   parseCreateTenant,
+			"tn":       parseCreateTenant,
+			"site":     parseCreateSite,
+			"si":       parseCreateSite,
+			"bldg":     parseCreateBuilding,
+			"building": parseCreateBuilding,
+			"bd":       parseCreateBuilding,
+			"room":     parseCreateRoom,
+			"ro":       parseCreateRoom,
+			"rack":     parseCreateRack,
+			"rk":       parseCreateRack,
+			"device":   parseCreateDevice,
+			"dv":       parseCreateDevice,
+			"corridor": parseCreateCorridor,
+			"co":       parseCreateCorridor,
+			"group":    parseCreateGroup,
+			"gr":       parseCreateGroup,
+			"orphan":   parseCreateOrphan,
+		}
+		noArgsCommands = map[string]node{
+			"selection":    &selectNode{},
+			"clear":        &clrNode{},
+			"grep":         &grepNode{},
+			"lsog":         &lsogNode{},
+			"lsenterprise": &lsenterpriseNode{},
+			"env":          &envNode{},
+			"pwd":          &pwdNode{},
+			"exit":         &exitNode{},
+		}
+	}
 	commands := []node{}
 	var command node
 	var err *ParserError
@@ -1591,80 +1658,11 @@ func parseCommand(frame Frame) (node, Frame, *ParserError) {
 }
 
 func Parse(buffer string) (node, *ParserError) {
-	commandDispatch = map[string]func(frame Frame) (node, Frame, *ParserError){
-		"ls":         parseLs,
-		"get":        parseGet,
-		"getu":       parseGetU,
-		"getslot":    parseGetSlot,
-		"undraw":     parseUndraw,
-		"draw":       parseDraw,
-		"drawable":   parseDrawable,
-		"hc":         parseHc,
-		"unset":      parseUnset,
-		"env":        parseEnv,
-		"+":          parseCreate,
-		"-":          parseDelete,
-		"=":          parseEqual,
-		".var:":      parseVar,
-		".cmds:":     parseLoad,
-		".template:": parseTemplate,
-		"len":        parseLen,
-		"link:":      parseLink,
-		"unlink":     parseUnlink,
-		"print":      parsePrint,
-		"man":        parseMan,
-		"cd":         parseCd,
-		"tree":       parseTree,
-		"ui.":        parseUi,
-		"camera.":    parseCamera,
-		">":          parseFocus,
-		"while":      parseWhile,
-		"for":        parseFor,
-		"if":         parseIf,
-		"alias":      parseAlias,
-	}
-	createObjDispatch = map[string]func(frame Frame) (node, Frame, *ParserError){
-		"tenant":   parseCreateTenant,
-		"tn":       parseCreateTenant,
-		"site":     parseCreateSite,
-		"si":       parseCreateSite,
-		"bldg":     parseCreateBuilding,
-		"building": parseCreateBuilding,
-		"bd":       parseCreateBuilding,
-		"room":     parseCreateRoom,
-		"ro":       parseCreateRoom,
-		"rack":     parseCreateRack,
-		"rk":       parseCreateRack,
-		"device":   parseCreateDevice,
-		"dv":       parseCreateDevice,
-		"corridor": parseCreateCorridor,
-		"co":       parseCreateCorridor,
-		"group":    parseCreateGroup,
-		"gr":       parseCreateGroup,
-		"orphan":   parseCreateOrphan,
-	}
-	noArgsCommands = map[string]node{
-		"selection":    &selectNode{},
-		"clear":        &clrNode{},
-		"grep":         &grepNode{},
-		"lsog":         &lsogNode{},
-		"lsenterprise": &lsenterpriseNode{},
-		"env":          &envNode{},
-		"pwd":          &pwdNode{},
-		"exit":         &exitNode{},
-	}
 	commentIdx := strings.Index(buffer, "//")
 	if commentIdx != -1 {
 		buffer = buffer[:commentIdx]
 	}
 	frame := newFrame(buffer)
-	// firstNonAsciiIdx := firstNonAscii(frame)
-	// if firstNonAsciiIdx < frame.end {
-	// 	return nil, newParserError(
-	// 		frame.new(firstNonAsciiIdx, firstNonAsciiIdx+1),
-	// 		"command should only contain ascii characters",
-	// 	)
-	// }
 	node, frame, err := parseCommand(frame)
 	if err != nil {
 		return nil, err

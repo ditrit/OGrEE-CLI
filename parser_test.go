@@ -230,16 +230,20 @@ func TestParseAssign(t *testing.T) {
 	}
 }
 
+func assertParsing(n node, expected node, t *testing.T) {
+	if !reflect.DeepEqual(n, expected) {
+		t.Errorf("unexpected parsing : \n\ntree : %s\nexpected : %s",
+			spew.Sdump(n), spew.Sdump(expected))
+	}
+}
+
 func testCommand(buffer string, expected node, t *testing.T) {
 	n, err := Parse(buffer)
 	if err != nil {
 		t.Errorf("cannot parse command : %s", err.Error())
 		return
 	}
-	if !reflect.DeepEqual(n, expected) {
-		t.Errorf("unexpected parsing : \ncommand : %s\n\ntree : %s\nexpected : %s",
-			buffer, spew.Sdump(n), spew.Sdump(expected))
-	}
+	assertParsing(n, expected, t)
 }
 
 func TestParseLsObj(t *testing.T) {
@@ -371,5 +375,18 @@ func TestFor(t *testing.T) {
 		command := "for i in 0..42 { " + simpleCommand + " }"
 		expected := &forRangeNode{"i", &intLeaf{0}, &intLeaf{42}, tree}
 		testCommand(command, expected, t)
+	}
+}
+
+func TestIf(t *testing.T) {
+	for simpleCommand, tree := range commandsMatching {
+		frame := newFrame("true { " + simpleCommand + " }e")
+		expected := &ifNode{&boolLeaf{true}, tree, nil}
+		result, _, err := parseIf(frame)
+		if err != nil {
+			t.Errorf("error parsing if frame : %s", err.Error())
+			return
+		}
+		assertParsing(result, expected, t)
 	}
 }
