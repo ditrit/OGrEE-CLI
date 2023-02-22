@@ -55,10 +55,12 @@ func (n pathNode) getStr() (string, error) {
 			output_words = append(output_words, word)
 		}
 	}
-	if output_words[0] == "P" {
-		output_words[0] = "Physical"
-	} else if output_words[0] == "L" {
-		output_words[0] = "Logical"
+	if len(output_words) > 0 {
+		if output_words[0] == "P" {
+			output_words[0] = "Physical"
+		} else if output_words[0] == "L" {
+			output_words[0] = "Logical"
+		}
 	}
 	r := "/" + strings.Join(output_words, "/")
 	return path.Clean(r), nil
