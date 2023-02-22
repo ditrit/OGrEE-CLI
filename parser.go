@@ -1551,22 +1551,21 @@ func parseSingleCommand(frame Frame) (node, Frame, *ParserError) {
 	}
 	startFrame := frame
 	commandKeyWord, frame := parseCommandKeyWord(frame)
-	if commandKeyWord == "" {
-		return parseUpdate(frame)
-	}
-	if lsIdx := indexOf(lsCommands, commandKeyWord); lsIdx != -1 {
-		return parseLsObj(lsIdx, skipWhiteSpaces(frame))
-	}
-	parseFunc, ok := commandDispatch[commandKeyWord]
-	if ok {
-		return parseFunc(skipWhiteSpaces(frame))
-	}
-	result, ok := noArgsCommands[commandKeyWord]
-	if ok {
-		return result, frame, nil
+	if commandKeyWord != "" {
+		if lsIdx := indexOf(lsCommands, commandKeyWord); lsIdx != -1 {
+			return parseLsObj(lsIdx, skipWhiteSpaces(frame))
+		}
+		parseFunc, ok := commandDispatch[commandKeyWord]
+		if ok {
+			return parseFunc(skipWhiteSpaces(frame))
+		}
+		result, ok := noArgsCommands[commandKeyWord]
+		if ok {
+			return result, frame, nil
+		}
 	}
 	_, frame, err := parsePath(frame)
-	ok, _ = parseExact(":", frame)
+	ok, _ := parseExact(":", frame)
 	if err == nil && ok {
 		return parseUpdate(startFrame)
 	}
