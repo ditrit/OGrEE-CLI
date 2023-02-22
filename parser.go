@@ -817,6 +817,9 @@ func parseUnset(frame Frame) (node, Frame, *ParserError) {
 }
 
 func parseEnv(frame Frame) (node, Frame, *ParserError) {
+	if frameEnd(frame) {
+		return &envNode{}, frame, nil
+	}
 	arg, valueFrame, err := parseAssign(frame)
 	if err != nil {
 		return nil, frame, err
@@ -1630,7 +1633,6 @@ func parseCommand(frame Frame) (node, Frame, *ParserError) {
 			"grep":         &grepNode{},
 			"lsog":         &lsogNode{},
 			"lsenterprise": &lsenterpriseNode{},
-			"env":          &envNode{},
 			"pwd":          &pwdNode{},
 			"exit":         &exitNode{},
 		}
