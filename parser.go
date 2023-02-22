@@ -72,11 +72,14 @@ func buildColoredFrame(frame Frame) string {
 }
 
 func (err *ParserError) Error() string {
-	errorString := "\n"
+	errorString := ""
 	for i := len(err.messages) - 1; i >= 0; i-- {
 		frame := err.frames[i]
 		errorString += buildColoredFrame(frame) + "\n"
-		errorString += err.messages[i] + "\n"
+		errorString += err.messages[i]
+		if i > 0 {
+			errorString += "\n"
+		}
 	}
 	return errorString
 }
@@ -584,6 +587,9 @@ func parseIndexing(frame Frame) (node, Frame, *ParserError) {
 }
 
 func parseArgValue(frame Frame) (string, Frame, *ParserError) {
+	if frameEnd(frame) {
+		return "", frame, newParserError(frame, "argument value expected")
+	}
 	if frame.first() == '(' {
 		close := findClosing(frame)
 		if close == frame.end {
@@ -592,6 +598,9 @@ func parseArgValue(frame Frame) (string, Frame, *ParserError) {
 		return frame.until(close + 1).str(), frame.from(close + 1), nil
 	} else if frame.first() == '"' {
 		endQuote := findNextQuote(frame)
+		if endQuote == frame.end {
+			return "", frame, newParserError(frame, "\" opened but never closed")
+		}
 		return frame.until(endQuote).str(), frame.from(endQuote + 1), nil
 	}
 	endValue := findNext(" ", frame)
