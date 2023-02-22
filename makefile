@@ -30,7 +30,7 @@ win:
 	-X cli/controllers.GitCommitDate=$(GITHASHDATE)"
 
 docker:
-	docker build -t cli .
+	docker build --network=host -t cli .
 
 rundocker:
 	docker run --network=host -it cli
