@@ -1388,7 +1388,6 @@ func GetOCLIAtrributes(Path string, ent int, data map[string]interface{}) error 
 	switch ent {
 	case TENANT:
 		data["domain"] = data["name"]
-		data["parentId"] = nil
 
 	case SITE:
 		//Default values
