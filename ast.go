@@ -1004,7 +1004,7 @@ func (n *createBuildingNode) execute() (interface{}, error) {
 	} else {
 		size, ok := sizeOrTemplateAny.([]float64)
 		if !ok || len(size) != 3 {
-			return nil, fmt.Errorf("vector3 (size) or string (template) expected")
+			return nil, fmt.Errorf("vector3 (size) or template expected")
 		}
 		attributes["size"] = size
 	}
@@ -1145,7 +1145,7 @@ func (n *createRackNode) execute() (interface{}, error) {
 	} else {
 		size, ok := sizeOrTemplateAny.([]float64)
 		if !ok || len(size) != 3 {
-			return nil, fmt.Errorf("vector3 (size) or string (template) expected")
+			return nil, fmt.Errorf("vector3 (size) or template expected")
 		}
 		attributes["size"] = size
 	}

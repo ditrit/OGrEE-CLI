@@ -13,7 +13,6 @@ import (
 	"os"
 	"os/exec"
 	"path"
-	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -1070,10 +1069,10 @@ func CD(x string) string {
 		var pth string
 
 		if string(x[0]) != "/" {
-			pth = path.Clean(State.CurrPath + "/" + x)
+			pth = State.CurrPath + "/" + x
 			exist, _ = CheckPathOnline(pth)
 		} else {
-			pth = path.Clean(x)
+			pth = x
 			exist, _ = CheckPathOnline(pth)
 		}
 		if exist == true {
@@ -1090,7 +1089,6 @@ func CD(x string) string {
 			} else {
 				pth = x
 			}
-			pth = path.Clean(pth)
 			if FindNodeInTree(&State.TreeHierarchy, StrToStack(pth), true) != nil {
 				State.PrevPath = State.CurrPath
 				State.CurrPath = pth
@@ -1221,8 +1219,6 @@ func Tree(x string, depth int) {
 		println(State.CurrPath + "/" + x)
 		Path = State.CurrPath + "/" + x
 	}
-
-	Path = path.Clean(Path)
 	tree(Path, depth)
 }
 
@@ -2783,7 +2779,7 @@ func LoadFile(path string) {
 	//Alternative to this would be to pass the LoadFile()
 	//function as an argument here
 	State.ScriptCalled = true
-	State.ScriptPath, _ = filepath.Abs(filepath.Clean(path))
+	State.ScriptPath = path
 }
 
 func LoadTemplate(data map[string]interface{}, filePath string) {
@@ -3279,10 +3275,10 @@ func PreProPath(Path string) []string {
 		pathSplit = pathSplit[2:]
 	default:
 		if Path[0] != '/' && len(State.CurrPath) > 1 {
-			pathSplit = strings.Split(path.Clean(State.CurrPath+"/"+Path), "/")
+			pathSplit = strings.Split(State.CurrPath+"/"+Path, "/")
 			pathSplit = pathSplit[2:]
 		} else {
-			pathSplit = strings.Split(path.Clean(Path), "/")
+			pathSplit = strings.Split(Path, "/")
 			if strings.TrimSpace(pathSplit[0]) == "Physical" ||
 				strings.TrimSpace(pathSplit[0]) == "Logical" ||
 				strings.TrimSpace(pathSplit[0]) == "Enterprise" {
