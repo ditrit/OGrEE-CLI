@@ -42,8 +42,7 @@ func InitDebugLevel(verbose string) {
 }
 
 // Intialise the ShellState
-func InitState(analyser string, env map[string]string) {
-
+func InitState(env map[string]string) {
 	State.ClipBoard = nil
 	State.TreeHierarchy = &(Node{})
 	(*(State.TreeHierarchy)).Entity = -1
@@ -56,9 +55,6 @@ func InitState(analyser string, env map[string]string) {
 
 	//Set the filter attributes setting
 	State.FilterDisplay = false
-
-	//Set the Analyser setting to ON for now
-	State.Analyser, _ = strconv.ParseBool(analyser)
 
 	phys := &Node{}
 	phys.Name = "Physical"

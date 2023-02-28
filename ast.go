@@ -258,10 +258,9 @@ func (n *loadNode) execute() (interface{}, error) {
 	}
 	path, ok := val.(string)
 	if !ok {
-		return nil, fmt.Errorf("Path should be a string")
+		return nil, fmt.Errorf("path should be a string")
 	}
-	cmd.LoadFile(path)
-	return nil, nil
+	return nil, LoadFile(path)
 }
 
 type loadTemplateNode struct {
@@ -275,14 +274,13 @@ func (n *loadTemplateNode) execute() (interface{}, error) {
 	}
 	path, ok := val.(string)
 	if !ok {
-		return nil, fmt.Errorf("Path should be a string")
+		return nil, fmt.Errorf("path should be a string")
 	}
 	data := fileToJSON(path)
 	if data == nil {
-		return nil, fmt.Errorf("Cannot read json file : %s", path)
+		return nil, fmt.Errorf("cannot read json file : %s", path)
 	}
-	cmd.LoadTemplate(data, path)
-	return path, nil
+	return path, cmd.LoadTemplate(data, path)
 }
 
 type printNode struct {

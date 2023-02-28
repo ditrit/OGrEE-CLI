@@ -24,14 +24,11 @@ type ShellState struct {
 	TreeHierarchy    *Node
 	EnvFilePath      string //Holds file path of '.env'
 	HistoryFilePath  string //Holds file path of '.history'
-	ScriptCalled     bool
-	ScriptPath       string
 	UnityClientURL   string
 	APIURL           string
 	APIKEY           string
 	UnityClientAvail bool  //For deciding to message unity or not
 	FilterDisplay    bool  //Set whether or not to send attributes to unity
-	Analyser         bool  //Use static analysis before executing scripts
 	ObjsForUnity     []int //Deciding what objects should be sent to unity
 	DrawThreshold    int   //Number of objects to be sent at a time to unity
 	DrawableObjs     []int //Indicate which objs drawable in unity
@@ -77,10 +74,6 @@ func IsDrawableEntity(x string) bool {
 
 func GetLineNumber() int {
 	return State.LineNumber
-}
-
-func GetScriptPath() string {
-	return State.ScriptPath
 }
 
 func GetKey() string {
