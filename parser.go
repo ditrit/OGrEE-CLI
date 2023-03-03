@@ -18,9 +18,9 @@ var noArgsCommands map[string]node
 var manCommands = []string{
 	"get", "getu", "getslot",
 	"+", "-", "=", ">",
-	".cmds", ".template", ".var",
-	"ui", "camera",
-	"link", "unlink",
+	".cmds:", ".template:", ".var:",
+	"ui.", "camera",
+	"link:", "unlink:",
 	"lsten", "lssite", "lsbldg", "lsroom", "lsrack", "lsdev", "lsac",
 	"lspanel", "lscabinet", "lscorridor", "lssensor", "lsenterprise",
 	"drawable", "draw", "undraw",
@@ -341,11 +341,11 @@ func parseFloat(frame Frame) (float64, Frame, *ParserError) {
 }
 
 func parseBool(frame Frame) (bool, Frame, *ParserError) {
-	if frame.end-frame.start >= 4 && frame.until(frame.start+4).str() == "true" {
-		return true, frame.forward(4), nil
+	if idx := strings.Index(strings.TrimSpace(frame.str()), "true"); idx == 0 {
+		return true, frame.forward(strings.Index(frame.str(), "true") + 4), nil
 	}
-	if frame.end-frame.start >= 5 && frame.until(frame.start+5).str() == "false" {
-		return false, frame.forward(5), nil
+	if idx := strings.Index(strings.TrimSpace(frame.str()), "false"); idx == 0 {
+		return false, frame.forward(strings.Index(frame.str(), "false") + 5), nil
 	}
 	return false, frame, newParserError(frame, "bool expected")
 }
@@ -1609,13 +1609,13 @@ func parseCommand(frame Frame) (node, Frame, *ParserError) {
 			".template:": parseTemplate,
 			"len":        parseLen,
 			"link:":      parseLink,
-			"unlink":     parseUnlink,
+			"unlink:":    parseUnlink,
 			"print":      parsePrint,
 			"man":        parseMan,
 			"cd":         parseCd,
 			"tree":       parseTree,
 			"ui.":        parseUi,
-			"camera.":    parseCamera,
+			"camera":     parseCamera,
 			">":          parseFocus,
 			"while":      parseWhile,
 			"for":        parseFor,

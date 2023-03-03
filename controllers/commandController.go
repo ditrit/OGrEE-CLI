@@ -1138,13 +1138,18 @@ func Help(entry string) {
 	var path string
 	entry = strings.TrimSpace(entry)
 	switch entry {
-	case "ls", "pwd", "print", "cd", "tree", "create", "get", "clear",
-		"update", "delete", "lsog", "grep", "for", "while", "if", "env",
-		"cmds", "var", "unset", "select", "camera", "ui", "hc", "drawable",
-		"link", "unlink", "draw", "getu", "getslot", "undraw",
-		"lsenterprise":
+	case "ls", "pwd", "print", "cd", "tree", "get", "clear",
+		"lsog", "grep", "for", "while", "if", "env",
+		"unset", "selection", "camera", "hc", "drawable",
+		"draw", "getu", "getslot", "undraw", "lsenterprise":
 		path = "./other/man/" + entry + ".md"
 
+	case "link:":
+		path = "./other/man/link.md"
+	case "unlink:":
+		path = "./other/man/unlink.md"
+	case "ui.":
+		path = "./other/man/ui.md"
 	case ">":
 		path = "./other/man/focus.md"
 
@@ -1157,13 +1162,13 @@ func Help(entry string) {
 	case "-":
 		path = "./other/man/minus.md"
 
-	case ".template":
+	case ".template:":
 		path = "./other/man/template.md"
 
-	case ".cmds":
+	case ".cmds:":
 		path = "./other/man/cmds.md"
 
-	case ".var":
+	case ".var:":
 		path = "./other/man/var.md"
 
 	case "lsobj", "lsten", "lssite", "lsbldg", "lsroom", "lsrack",
