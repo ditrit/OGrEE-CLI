@@ -1172,7 +1172,7 @@ func Help(entry string) {
 		path = "./other/man/var.md"
 
 	case "lsobj", "lsten", "lssite", "lsbldg", "lsroom", "lsrack",
-		"lsdev":
+		"lsdev", "lsac", "lscorridor", "lspanel", "lssensor", "lscabinet":
 		path = "./other/man/lsobj.md"
 
 	default:

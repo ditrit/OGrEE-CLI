@@ -32,8 +32,8 @@ EXAMPLE
     lscabinet
     lspanel
     lsac ../../DEMO -r 
-    lsdev . -s heightUnit -r
+    lsdev  -s heightUnit -r
     lsrack -r -s heightUnit -f ("Value1:%s\tValue2:%s",attr1,attr2)
-    lsdev . -f ("HeightUnit:%d\t\tColor:%x",heightUnit,color) 
-    lsten . -f "color:mainContact:mainPhone"
+    lsdev  -f ("HeightUnit:%d\t\tColor:%x",heightUnit,color) 
+    lsten  -f "color:mainContact:mainPhone"
     lssite ../../DEMO -f "zipcode:orientation"
