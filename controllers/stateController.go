@@ -34,7 +34,6 @@ type ShellState struct {
 	DrawableObjs     []int //Indicate which objs drawable in unity
 	DrawableJsons    map[string]map[string]interface{}
 	DebugLvl         int
-	LineNumber       int //Used exectuting scripts
 	Terminal         **readline.Instance
 	Timeout          time.Duration
 }
@@ -70,10 +69,6 @@ func IsDrawableEntity(x string) bool {
 		}
 	}
 	return false
-}
-
-func GetLineNumber() int {
-	return State.LineNumber
 }
 
 func GetKey() string {

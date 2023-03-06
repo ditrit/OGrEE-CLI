@@ -49,7 +49,6 @@ func InitState(env map[string]string) {
 	State.TreeHierarchy.PID = ""
 	State.CurrPath = "/Physical"
 	State.PrevPath = "/Physical"
-	State.LineNumber = 0
 
 	State.UnityClientAvail = false
 
