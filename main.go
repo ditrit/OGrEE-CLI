@@ -7,6 +7,7 @@ import (
 type Flags struct {
 	verbose    string
 	unityURL   string
+	User       string
 	APIURL     string
 	APIKEY     string
 	listenPort int
@@ -29,7 +30,7 @@ func NonDefault[T comparable](x, y, defaultValue T) T {
 
 func main() {
 	var listenPORT, l int
-	var verboseLevel, v, unityURL, u, APIURL, a, APIKEY, k,
+	var verboseLevel, v, unityURL, u, APIURL, a, user, c, APIKEY, k,
 		envPath, e, histPath, h, analyse, s, file, f string
 
 	flag.StringVar(&v, "v", "ERROR",
@@ -52,6 +53,11 @@ func main() {
 		"Indicates which port to communicate to Unity")
 	flag.IntVar(&l, "l", 0,
 		"Indicates which port to communicate to Unity")
+
+	flag.StringVar(&user, "user", "",
+		"Indicate the user email to access the API")
+	flag.StringVar(&c, "c", "",
+		"Indicate the user email to access the API")
 
 	flag.StringVar(&APIKEY, "api_key", "", "Indicate the key of the API")
 	flag.StringVar(&k, "k", "", "Indicate the key of the API")
@@ -81,6 +87,7 @@ func main() {
 	var flags Flags
 	flags.verbose = NonDefault(v, verboseLevel, "ERROR")
 	flags.unityURL = NonDefault(u, unityURL, "")
+	flags.User = NonDefault(c, user, "")
 	flags.APIURL = NonDefault(a, APIURL, "")
 	flags.APIKEY = NonDefault(k, APIKEY, "")
 	flags.listenPort = NonDefault(l, listenPORT, 0)

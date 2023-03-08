@@ -63,8 +63,9 @@ func Start(flags *Flags) {
 
 	c.InitTimeout(env)                           //Set the Unity Timeout
 	c.GetURLs(flags.APIURL, flags.unityURL, env) //Set the URLs
+	c.InitEmail(flags.User, env)                 //Set the User email
 	c.InitKey(flags.APIKEY, env)                 //Set the API Key
-	user, _ := c.Login(env)
+	user, _ := c.Login(c.State.UserEmail, c.State.APIKEY)
 
 	c.InitState(flags.analyser, env)
 

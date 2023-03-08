@@ -3,7 +3,6 @@ package controllers
 //This file contains code associated with initialising the Shell
 
 import (
-	"bufio"
 	l "cli/logger"
 	"cli/models"
 	"cli/readline"
@@ -11,6 +10,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -226,6 +226,26 @@ func InitTimeout(env map[string]string) {
 	return
 }
 
+func InitEmail(email string, env map[string]string) string {
+	if email != "" {
+		State.UserEmail = email
+		return State.UserEmail
+	}
+	envEmail, ok := env["user"]
+	if ok {
+		State.UserEmail = envEmail
+		return State.UserEmail
+	}
+	fmt.Println("Error: No User Email Found")
+	if State.DebugLvl > 0 {
+		l.GetErrorLogger().Println(
+			"No User Email provided in env file nor as argument")
+	}
+
+	State.UserEmail = ""
+	return ""
+}
+
 func InitKey(apiKey string, env map[string]string) string {
 	if apiKey != "" {
 		State.APIKEY = apiKey
@@ -243,32 +263,6 @@ func InitKey(apiKey string, env map[string]string) string {
 	}
 
 	State.APIKEY = ""
-	return ""
-}
-
-// Invoked on 'lsog' command
-func GetEmail() string {
-	file, err := os.Open("./.env")
-	if err != nil {
-		fmt.Println(err)
-	}
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
-	scanner.Split(bufio.ScanWords) // use scanwords
-	for scanner.Scan() {
-		if strings.HasPrefix(scanner.Text(), "user=") {
-			return scanner.Text()[5:]
-		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		if State.DebugLvl > 0 {
-			fmt.Println(err)
-		}
-
-		l.GetErrorLogger().Println(err.Error())
-	}
 	return ""
 }
 
@@ -433,6 +427,11 @@ func CreateCredentials() (string, string) {
 	return user, token
 }
 
+func CheckEmailIsValid(email string) bool {
+	emailRegex := "(\\w)+@(\\w)+\\.(\\w)+"
+	return regexp.MustCompile(emailRegex).MatchString(email)
+}
+
 func CheckKeyIsValid(key string) bool {
 	resp, err := models.Send("GET", State.APIURL+"/api/token/valid", key, nil)
 	if err != nil {
@@ -462,12 +461,10 @@ func CheckKeyIsValid(key string) bool {
 	return true
 }
 
-func Login(env map[string]string) (string, string) {
-	user, userOk := env["user"]
-	key, keyOk := env["apiKey"]
+func Login(user, key string) (string, string) {
 
-	if !userOk || !keyOk || (userOk && user == "") || (keyOk && key == "") {
-		l.GetInfoLogger().Println("Key not found, going to generate..")
+	if !CheckEmailIsValid(user) || !CheckKeyIsValid(key) {
+		l.GetInfoLogger().Println("Credentials not found or invalid, going to generate..")
 		user, key = CreateCredentials()
 	}
 

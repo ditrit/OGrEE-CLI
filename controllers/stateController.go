@@ -27,6 +27,7 @@ type ShellState struct {
 	ScriptCalled     bool
 	ScriptPath       string
 	UnityClientURL   string
+	UserEmail        string
 	APIURL           string
 	APIKEY           string
 	UnityClientAvail bool  //For deciding to message unity or not
