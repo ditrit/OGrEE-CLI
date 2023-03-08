@@ -32,10 +32,12 @@ func InterpretLine(str string) {
 	_, err := root.execute()
 	if err != nil {
 		l.GetErrorLogger().Println(err.Error())
-		if traceErr, ok := err.(*stackTraceError); ok {
-			fmt.Println(traceErr.Error())
-		} else {
-			fmt.Println("Error : " + err.Error())
+		if c.State.DebugLvl > c.NONE {
+			if traceErr, ok := err.(*stackTraceError); ok {
+				fmt.Println(traceErr.Error())
+			} else {
+				fmt.Println("Error : " + err.Error())
+			}
 		}
 	}
 }

@@ -260,6 +260,9 @@ func (n *loadNode) execute() (interface{}, error) {
 	if !ok {
 		return nil, fmt.Errorf("path should be a string")
 	}
+
+	//Usually functions from 'controller' pkg are called
+	//But in this case we are calling a function from 'main' pkg
 	return nil, LoadFile(path)
 }
 
