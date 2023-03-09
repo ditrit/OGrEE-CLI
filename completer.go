@@ -425,7 +425,7 @@ func GetPrefixCompleter() *readline.PrefixCompleter {
 		readline.PcItem("while", false),
 		readline.PcItem("for", false),
 		readline.PcItem("if", false),
-		readline.PcItem("camera", false,
+		readline.PcItem("camera.", false,
 			readline.PcItem("move", false,
 				readline.PcItem("=", false)),
 			readline.PcItem("translate", false,

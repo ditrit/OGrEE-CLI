@@ -1,4 +1,4 @@
-USAGE:  camera [UnityATTRIBUTE]=[VALUE]   
+USAGE:  camera.[UnityATTRIBUTE]=[VALUE]   
 
 Sends a command to the Unity Client to adjust the camera by 'UnityATTRIBUTE' according to 'VALUE'   
 
@@ -21,6 +21,6 @@ UNITY ATTRIBUTES AND VALUE FORMATS
 
 EXAMPLE
 
-    camera wait = 2
-    camera move = [5,5,5]@[0,0]
-    camera translate = [5,5,5]@[0,0]
+    camera.wait = 2
+    camera.move = [5,5,5]@[0,0]
+    camera.translate = [5,5,5]@[0,0]
