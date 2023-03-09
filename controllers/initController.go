@@ -464,6 +464,9 @@ func Login(user, key string) (string, string) {
 
 	if !CheckEmailIsValid(user) || !CheckKeyIsValid(key) {
 		l.GetInfoLogger().Println("Credentials not found or invalid, going to generate..")
+		if State.DebugLvl > NONE {
+			println("Credentials not found or invalid, going to generate..")
+		}
 		user, key = CreateCredentials()
 	}
 
