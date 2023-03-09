@@ -151,9 +151,13 @@ func InitState(analyser string, env map[string]string) {
 	SearchAndInsert(&State.TreeHierarchy, enterprise, "/Organisation")
 
 	//Set which objects Unity will be notified about
+	//
+	//The number of drawable jsons is not fixed
+	//GROUP was used as the length here because there
+	//is no need to check 'drawability' for objects after it
 	State.ObjsForUnity = SetObjsForUnity("updates", env)
 	State.DrawableObjs = SetObjsForUnity("drawable", env)
-	State.DrawableJsons = make(map[string]map[string]interface{}, 16)
+	State.DrawableJsons = make(map[string]map[string]interface{}, GROUP)
 
 	for i := TENANT; i < GROUP+1; i++ {
 		ent := EntityToString(i)

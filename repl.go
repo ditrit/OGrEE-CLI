@@ -53,10 +53,10 @@ func InitEnvFromShell(env map[string]string) {
 		"buildingDrawableJson", "cabinetDrawableJson",
 		"corridorDrawableJson", "deviceDrawableJson", "drawLimit", "drawable",
 		"groupDrawableJson", "listenPort", "objTemplateDrawableJson",
-		"powerpanelDrawableJson", "rackDrawableJson", "roomDrawableJson",
-		"roomTemplateDrawableJson", "rowDrawableJson", "sensorDrawableJson",
-		"separatorDrawableJson", "siteDrawableJson", "tenantDrawableJson",
-		"tileDrawableJson", "unityTimeout", "unityURL", "updates", "user"}
+		"panelDrawableJson", "rackDrawableJson", "roomDrawableJson",
+		"roomTemplateDrawableJson", "sensorDrawableJson",
+		"siteDrawableJson", "tenantDrawableJson",
+		"unityTimeout", "unityURL", "updates", "user"}
 
 	for _, item := range envVars {
 		env[item] = os.Getenv(item)
