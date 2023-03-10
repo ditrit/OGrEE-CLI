@@ -191,48 +191,33 @@ func InitUnityCom(rl *readline.Instance, addr string) {
 	go models.ReceiveLoop(rl, addr, &State.UnityClientAvail)
 }
 
-func InitTimeout(env map[string]string) {
-	if duration, ok := env["unityTimeout"]; ok && duration != "" {
-		var timeLen int
-		var durationType string
-		fmt.Sscanf(duration, "%d%s", &timeLen, &durationType)
-		switch durationType {
-		case "ns":
-			State.Timeout = time.Nanosecond * time.Duration(timeLen)
-		case "us":
-			State.Timeout = time.Microsecond * time.Duration(timeLen)
-		case "ms":
-			State.Timeout = time.Millisecond * time.Duration(timeLen)
-		case "s":
-			State.Timeout = time.Second * time.Duration(timeLen)
-		default:
-			l.GetWarningLogger().Println("Invalid duration unit found. Resorting to default of ms")
-			if State.DebugLvl > 1 {
-				println("Invalid duration unit found in env file. Resorting to default of ms")
-			}
-
-			State.Timeout = time.Millisecond * time.Duration(timeLen)
+func InitTimeout(duration string) {
+	var timeLen int
+	var durationType string
+	fmt.Sscanf(duration, "%d%s", &timeLen, &durationType)
+	switch durationType {
+	case "ns":
+		State.Timeout = time.Nanosecond * time.Duration(timeLen)
+	case "us":
+		State.Timeout = time.Microsecond * time.Duration(timeLen)
+	case "ms":
+		State.Timeout = time.Millisecond * time.Duration(timeLen)
+	case "s":
+		State.Timeout = time.Second * time.Duration(timeLen)
+	default:
+		l.GetWarningLogger().Println("Invalid duration unit found. Resorting to default of ms")
+		if State.DebugLvl > 1 {
+			println("Invalid duration unit found in env file. Resorting to default of ms")
 		}
-		return
-	}
 
-	if State.DebugLvl > 1 {
-		l.GetWarningLogger().Println("Unity deadline not found. Resorting to default time duration of 10 ms")
-		println("Warning: Unity deadline not found in env file. Resorting to default of 10 ms")
+		State.Timeout = time.Millisecond * time.Duration(timeLen)
 	}
-
-	State.Timeout = time.Millisecond * time.Duration(10)
 	return
 }
 
-func InitEmail(email string, env map[string]string) string {
+func InitEmail(email string) string {
 	if email != "" {
 		State.UserEmail = email
-		return State.UserEmail
-	}
-	envEmail, ok := env["user"]
-	if ok {
-		State.UserEmail = envEmail
 		return State.UserEmail
 	}
 	fmt.Println("Error: No User Email Found")
@@ -245,14 +230,9 @@ func InitEmail(email string, env map[string]string) string {
 	return ""
 }
 
-func InitKey(apiKey string, env map[string]string) string {
+func InitKey(apiKey string) string {
 	if apiKey != "" {
 		State.APIKEY = apiKey
-		return State.APIKEY
-	}
-	envApiKey, ok := env["apiKey"]
-	if ok {
-		State.APIKEY = envApiKey
 		return State.APIKEY
 	}
 	fmt.Println("Error: No API Key Found")
@@ -266,34 +246,22 @@ func InitKey(apiKey string, env map[string]string) string {
 }
 
 // Automatically assign Unity and API URLs
-func GetURLs(apiURL string, unityURL string, env map[string]string) {
+func GetURLs(apiURL string, unityURL string) {
 	if apiURL != "" {
-		State.APIURL = apiURL
+		// if present, remove the last / to avoid path issues in ls command
+		apiURL = strings.TrimRight(apiURL, "/")
+
+		// check if URL is valid
+		_, err := url.ParseRequestURI(apiURL)
+		if err != nil {
+			println("apiURL is not valid! ")
+		} else {
+			State.APIURL = apiURL
+		}
 	}
 
 	if unityURL != "" {
 		State.UnityClientURL = unityURL
-	}
-
-	if State.UnityClientURL == "" {
-		if envUnityURL, ok := env["unityURL"]; ok {
-			State.UnityClientURL = envUnityURL
-		}
-	}
-
-	if State.APIURL == "" {
-		if envApiURL, ok := env["apiURL"]; ok {
-			// if present, remove the last / to avoid path issues in ls command
-			envApiURL = strings.TrimRight(envApiURL, "/")
-
-			// check if URL is valid
-			_, err := url.ParseRequestURI(envApiURL)
-			if err != nil {
-				println("apiURL is not valid! ")
-			} else {
-				State.APIURL = envApiURL
-			}
-		}
 	}
 
 	if State.APIURL == "" {
@@ -309,7 +277,7 @@ func GetURLs(apiURL string, unityURL string, env map[string]string) {
 			"http://localhost:5500")
 		l.GetInfoLogger().Println("Falling back to default Unity URL:" +
 			"http://localhost:5500")
-		State.APIURL = "http://localhost:5500"
+		State.UnityClientURL = "http://localhost:5500"
 	}
 }
 
@@ -416,11 +384,14 @@ func CreateCredentials() (string, string) {
 
 	envMap, err := godotenv.Read(State.EnvFilePath)
 	if err != nil {
-		panic(err)
+		if State.DebugLvl > NONE {
+			println("Note: Unable to record credentials into env file")
+		}
+	} else {
+		envMap["user"] = user
+		envMap["apiKey"] = token
+		godotenv.Write(envMap, State.EnvFilePath)
 	}
-	envMap["user"] = user
-	envMap["apiKey"] = token
-	godotenv.Write(envMap, State.EnvFilePath)
 
 	l.GetInfoLogger().Println("Credentials created")
 	return user, token

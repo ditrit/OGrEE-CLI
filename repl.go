@@ -1,10 +1,10 @@
 package main
 
-//This file inits the State and
+//This file inits the Readline instance
 //manages the interpreter and REPL
 //(read eval print loop)
 
-//Since readline hasn't been updated since 2018
+//Since chzyer/readline library is not actively developed
 //it may be worth switching to peterh/liner
 //https://stackoverflow.com/
 // questions/33025599/move-the-cursor-in-a-c-program
@@ -16,8 +16,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-
-	"github.com/joho/godotenv"
 )
 
 func InterpretLine(str string) {
@@ -42,47 +40,8 @@ func InterpretLine(str string) {
 	}
 }
 
-// Init environment if env file was not provided
-// Useful for docker deployment
-func InitEnvFromShell(env map[string]string) {
-	godotenv.Load()
-	envVars := []string{"acDrawableJson", "apiKey", "apiURL",
-		"buildingDrawableJson", "cabinetDrawableJson",
-		"corridorDrawableJson", "deviceDrawableJson", "drawLimit", "drawable",
-		"groupDrawableJson", "listenPort", "objTemplateDrawableJson",
-		"panelDrawableJson", "rackDrawableJson", "roomDrawableJson",
-		"roomTemplateDrawableJson", "sensorDrawableJson",
-		"siteDrawableJson", "tenantDrawableJson",
-		"unityTimeout", "unityURL", "updates", "user"}
-
-	for _, item := range envVars {
-		env[item] = os.Getenv(item)
-	}
-}
-
 // Init the Shell
-func Start(flags *Flags) {
-	l.InitLogs()
-	c.InitEnvFilePath(flags.envPath)
-	c.InitHistoryFilePath(flags.histPath)
-	c.InitDebugLevel(flags.verbose) //Set the Debug level
-
-	env, envErr := godotenv.Read(flags.envPath)
-	if envErr != nil {
-		fmt.Println("Cannot read environment file", flags.envPath, ":", envErr.Error())
-		fmt.Println("Defaulting to parent passed environment variables")
-		fmt.Println("\n\nFor more details please refer to: https://ogree.ditrit.io/htmls/programming.html")
-		fmt.Println("View an environment file example here: https://ogree.ditrit.io/htmls/clienv.html")
-		InitEnvFromShell(env)
-	}
-
-	c.InitTimeout(env)                           //Set the Unity Timeout
-	c.GetURLs(flags.APIURL, flags.unityURL, env) //Set the URLs
-	c.InitEmail(flags.User, env)                 //Set the User email
-	c.InitKey(flags.APIKEY, env)                 //Set the API Key
-	user, _ := c.Login(c.State.UserEmail, c.State.APIKEY)
-
-	c.InitState(env)
+func Start(flags *Flags, user string) {
 
 	rl, err := readline.NewEx(&readline.Config{
 		Prompt: "\u001b[1m\u001b[32m" + user + "@" + "OGrEE3D:" +
@@ -124,7 +83,6 @@ func Repl(rl *readline.Instance, user string) {
 			break
 		}
 		InterpretLine(line)
-		//c.UpdateSessionState(&line)
 		//Update Prompt
 		rl.SetPrompt("\u001b[1m\u001b[32m" + user + "@" + "OGrEE3D:" +
 			"\u001b[37;1m" + c.State.CurrPath + "\u001b[1m\u001b[32m$>\u001b[0m ")
