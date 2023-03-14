@@ -9,9 +9,11 @@ require (
 )
 
 require (
+	github.com/BurntSushi/toml v1.2.1 // indirect
 	github.com/blynn/nex v0.0.0-20210330102341-1a3320dab988 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20200410134404-eec4a21b6bb0 // indirect
+	github.com/spf13/pflag v1.0.5 // indirect
 	modernc.org/golex v1.0.1 // indirect
 	modernc.org/goyacc v1.0.0 // indirect
 	modernc.org/mathutil v1.5.0 // indirect

@@ -1,40 +1,32 @@
 package main
 
 import (
-	"flag"
-	"os"
-	"strconv"
+	//"flag"
 
-	con "cli/controllers"
-	log "cli/logger"
-
-	"github.com/joho/godotenv"
+	"cli/config"
 )
 
 type Flags struct {
 	verbose    string
+	apiURL     string
 	unityURL   string
-	User       string
-	APIURL     string
-	APIKEY     string
-	listenPort int
+	timeout    string
 	envPath    string
 	histPath   string
 	script     string
-	timeout    string
+	User       string
+	apiKey     string
+	listenPort int
 }
 
-//We have 4 Levels of precedence for initialising vars
-//1 -> cli args (single letter)
-//2 -> cli args (full word)
-//3 -> env file
-//4 -> parent shell environment
-//Defaults if nothing found
+//We have 4 Levels of precedence for initialising every var
+//1 -> cli args
+//2 -> env file
+//3 -> parent shell environment
+//Default if nothing found
 
-func InitParams[T comparable](letter, word, env, envDefault, parent, parentDefault, defaultValue T) T {
-	if letter != defaultValue {
-		return letter
-	} else if word != defaultValue {
+func InitParams[T comparable](word, env, envDefault, parent, parentDefault, defaultValue T) T {
+	if word != defaultValue {
 		return word
 	} else if env != defaultValue && env != envDefault {
 		return env
@@ -46,58 +38,42 @@ func InitParams[T comparable](letter, word, env, envDefault, parent, parentDefau
 }
 
 func main() {
-	var listenPORT, l int
-	var verboseLevel, v, unityURL, u, APIURL, a, user, c, APIKEY, k,
-		envPath, e, histPath, h, file, f, t, timeout string
+	/*var listenPORT int
+	var verbose, unityURL, apiURL, user, apiKey,
+		envPath, histPath, file, timeout string
 
-	flag.StringVar(&v, "v", "ERROR",
+	flag.StringVarP(&verbose, "verbose", "v", "ERROR",
 		"Indicates level of debugging messages."+
 			"The levels are of in ascending order:"+
 			"{NONE,ERROR,WARNING,INFO,DEBUG}.")
 
-	flag.StringVar(&verboseLevel, "verbose", "ERROR",
-		"Indicates level of debugging messages."+
-			"The levels are of in ascending order:"+
-			"{NONE,ERROR,WARNING,INFO,DEBUG}.")
+	flag.StringVarP(&unityURL, "unity_url", "u", "", "Unity URL")
+	flag.StringVarP(&apiURL, "api_url", "a", "", "API URL")
 
-	flag.StringVar(&unityURL, "unity_url", "", "Unity URL")
-	flag.StringVar(&u, "u", "", "Unity URL")
-
-	flag.StringVar(&APIURL, "api_url", "", "API URL")
-	flag.StringVar(&a, "a", "", "API URL")
-
-	flag.IntVar(&listenPORT, "listen_port", 0,
-		"Indicates which port to communicate to Unity")
-	flag.IntVar(&l, "l", 0,
+	flag.IntVarP(&listenPORT, "listen_port", "l", 0,
 		"Indicates which port to communicate to Unity")
 
 	flag.StringVar(&user, "user", "",
 		"Indicate the user email to access the API")
-	flag.StringVar(&c, "c", "",
-		"Indicate the user email to access the API")
 
-	flag.StringVar(&APIKEY, "api_key", "", "Indicate the key of the API")
-	flag.StringVar(&k, "k", "", "Indicate the key of the API")
+	flag.StringVarP(&apiKey, "api_key", "k", "", "Indicate the key of the API")
 
-	flag.StringVar(&envPath, "env_path", "./.env",
-		"Indicate the location of the Shell's env file")
-	flag.StringVar(&e, "e", "./.env",
+	flag.StringVarP(&envPath, "env_path", "e", "./.env",
 		"Indicate the location of the Shell's env file")
 
-	flag.StringVar(&histPath, "history_path", "./.history",
-		"Indicate the location of the Shell's history file")
-	flag.StringVar(&h, "h", "./.history",
+	flag.StringVarP(&histPath, "history_path", "h", "./.history",
 		"Indicate the location of the Shell's history file")
 
-	flag.StringVar(&file, "file", "", "Launch the shell as an interpreter "+
+	flag.StringVarP(&file, "file", "f", "", "Launch the shell as an interpreter "+
 		" by only executing an OCLI script file")
-	flag.StringVar(&f, "f", "", "Launch the shell as an interpreter "+
-		" by only executing an OCLI script file")
+
+	flag.StringVarP(&timeout, "unity_timeout", "t", "10ms",
+		" Maximum latency CLI should wait for a response from Unity before quitting")
 
 	flag.Parse()
 
 	var flags Flags
-	flags.envPath = InitParams(e, envPath, "./.env", os.Getenv("envPath"), "./.env", "./.env", "./.env")
+	flags.envPath = InitParams(envPath, "./.env", "./.env", os.Getenv("envPath"), "./.env", "./.env")
 
 	//Test if env path is good otherwise
 	env, envErr := godotenv.Read(flags.envPath)
@@ -107,16 +83,16 @@ func main() {
 		env = nil
 	}
 
-	//env file does not have verboseLevel parameter at this time
-	flags.verbose = InitParams(v, verboseLevel, "ERROR", "ERROR", os.Getenv("verboseLevel"), "", "ERROR")
+	//env file does not have verbose parameter at this time
+	flags.verbose = InitParams(verbose, env["verbose"], "ERROR", os.Getenv("verbose"), "", "ERROR")
 
-	flags.unityURL = InitParams(u, unityURL, env["unityURL"], "", os.Getenv("unityURL"), "", "")
+	flags.unityURL = InitParams(unityURL, env["unityURL"], "", os.Getenv("unityURL"), "", "")
 
-	flags.User = InitParams(c, user, env["user"], "", os.Getenv("user"), "", "")
+	flags.User = InitParams(user, env["user"], "", os.Getenv("user"), "", "")
 
-	flags.APIURL = InitParams(a, APIURL, env["apiURL"], "", os.Getenv("apiURL"), "", "")
+	flags.apiURL = InitParams(apiURL, env["apiURL"], "", os.Getenv("apiURL"), "", "")
 
-	flags.APIKEY = InitParams(k, APIKEY, env["apiKey"], "", os.Getenv("apiKey"), "", "")
+	flags.apiKey = InitParams(apiKey, env["apiKey"], "", os.Getenv("apiKey"), "", "")
 
 	envlistenPort, convErr := strconv.Atoi(env["listenPort"])
 	if convErr != nil {
@@ -127,29 +103,30 @@ func main() {
 	if convErr1 != nil {
 		oslistenPort = 0
 	}
-	flags.listenPort = InitParams(l, listenPORT, envlistenPort, 0, oslistenPort, 0, 0)
+	flags.listenPort = InitParams(listenPORT, envlistenPort, 0, oslistenPort, 0, 0)
 
-	flags.histPath = InitParams(h, histPath, env["history"], "", os.Getenv("history"), "", "./.history")
+	flags.histPath = InitParams(histPath, env["history"], "", os.Getenv("history"), "", "./.history")
 
 	//Doesn't make sense for env file and OS Env
 	//to have OCLI assigned
-	flags.script = InitParams(f, file, "", "", "", "", "")
+	flags.script = InitParams(file, "", "", "", "", "")
 
-	flags.timeout = InitParams(t, timeout, env["unityTimeout"], "", os.Getenv("unityTimeout"), "", "10ms")
-
-	log.InitLogs()
+	flags.timeout = InitParams(timeout, env["unityTimeout"], "", os.Getenv("unityTimeout"), "", "10ms")
+	*/
+	config.ReadConfig()
+	/*log.InitLogs()
 	con.InitEnvFilePath(flags.envPath)
 	con.InitHistoryFilePath(flags.histPath)
 	con.InitDebugLevel(flags.verbose) //Set the Debug level
 
 	con.InitTimeout(flags.timeout)            //Set the Unity Timeout
-	con.GetURLs(flags.APIURL, flags.unityURL) //Set the URLs
-	userName, key := con.Login(flags.User, flags.APIKEY)
+	con.GetURLs(flags.apiURL, flags.unityURL) //Set the URLs
+	userName, key := con.Login(flags.User, flags.apiKey)
 	con.InitEmail(flags.User) //Set the User email
 	con.InitKey(key)          //Set the API Key
 
 	con.InitState(env)
 
 	//Pass control to repl.go
-	Start(&flags, userName)
+	Start(&flags, userName)*/
 }
