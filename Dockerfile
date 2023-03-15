@@ -9,8 +9,7 @@ ADD . /home/
 RUN make
 
 #Final output image
-FROM gcr.io/distroless/base-debian11
+FROM busybox:latest
 WORKDIR /home
 ADD . /home/
 COPY --from=builder /home/cli /home/
-ENTRYPOINT ["/home/cli"]
