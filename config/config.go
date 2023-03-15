@@ -3,7 +3,6 @@ package config
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"strings"
 
@@ -21,7 +20,6 @@ type Config struct {
 	ConfigPath   string            `json:",omitempty"`
 	HistPath     string            `json:",omitempty"`
 	Script       string            `json:",omitempty"`
-	ListenPort   int               `json:",omitempty"`
 	Drawable     []string          `json:",omitempty"`
 	DrawableJson map[string]string `json:",omitempty"`
 	DrawLimit    int               `json:",omitempty"`
@@ -39,7 +37,6 @@ func defaultConfig() Config {
 		ConfigPath:   "./config.toml",
 		HistPath:     "./.history",
 		Script:       "",
-		ListenPort:   0,
 		Drawable:     []string{"all"},
 		DrawableJson: map[string]string{},
 		DrawLimit:    50,
@@ -72,25 +69,12 @@ func defaultConfigMap() map[string]interface{} {
 func GetParentShellVars(defaults map[string]interface{}) {
 	godotenv.Load()
 
-	//we can use strings delimited by ':' for passing arrays
+	//we can use strings delimited by ':' for array arguments
+	// (Drawable and Updates)
 	//we can define keys of DrawableJson as separate key-values,
 	//and parse all of them into a map here and check if the map
 	//differs with the default map
 	drawable := map[string]string{}
-
-	//Drawable 		-> []string{"all"}
-	//Updates		-> []string{"all"}
-	//DrawableJson 	-> map[string]string{}
-
-	//parentShellVars := map[string]interface{}{}
-	//list := []string{"acDrawableJson", "apiKey", "apiURL",
-	//	"buildingDrawableJson", "cabinetDrawableJson",
-	//	"corridorDrawableJson", "deviceDrawableJson",
-	//	"drawLimit", "drawable", "groupDrawableJson",
-	//	"listenPort", "objTemplateDrawableJson", "panelDrawableJson",
-	//	"rackDrawableJson", "roomDrawableJson", "roomTemplateDrawableJson",
-	//	"sensorDrawableJson", "separatorDrawableJson", "siteDrawableJson",
-	//	"tenantDrawableJson", "UnityTimeout", "unityURL", "updates", "user"}
 
 	for key, value := range defaults {
 		if shellValue := os.Getenv(key); shellValue != "" {
@@ -125,50 +109,48 @@ func GetParentShellVars(defaults map[string]interface{}) {
 	//return parentShellVars
 }
 
-func Disp(x map[string]interface{}) {
-	enc := json.NewEncoder(os.Stdout)
-	enc.SetIndent("", "    ")
-
-	if err := enc.Encode(x); err != nil {
-		log.Fatal(err)
-	}
-}
+//func Disp(x map[string]interface{}) {
+//	enc := json.NewEncoder(os.Stdout)
+//	enc.SetIndent("", "    ")
+//
+//	if err := enc.Encode(x); err != nil {
+//		log.Fatal(err)
+//	}
+//}
 
 func ReadConfig() *Config {
 	var confPath string
 	argConf := &Config{}
 	conf := defaultConfigMap()
-	//output := map[string]interface{}{}
 	tomlRead := map[string]interface{}{}
 	argsRead := map[string]interface{}{}
 
 	GetParentShellVars(conf)
-	//parent := GetParentShellVars()
-	//maps.Copy(conf, parent)
-	println()
-	println("DEBUG LETS VIEW Default conf after merging with parent")
-	Disp(conf)
-	println()
+	//println()
+	//println("DEBUG LETS VIEW Default conf after merging with parent")
+	//Disp(conf)
+	//println()
 
-	flag.StringVarP(&argConf.ConfigPath, "conf_path", "c", "",
+	flag.StringVarP(&argConf.ConfigPath, "ConfigPath", "c", "",
 		"Indicate the location of the Shell's config file")
 
-	flag.StringVarP(&argConf.Verbose, "verbose", "v", "",
+	flag.StringVarP(&argConf.Verbose, "Verbose", "v", "",
 		"Indicates level of debugging messages."+
 			"The levels are of in ascending order:"+
 			"{NONE,ERROR,WARNING,INFO,DEBUG}.")
 
+	flag.StringVar(&argConf.User, "User", "", "User Email Credential")
 	flag.StringVarP(&argConf.UnityTimeout, "UnityTimeout", "t", "",
 		" Maximum latency CLI should wait for a response from Unity before quitting")
-	flag.StringVarP(&argConf.UnityURL, "unity_url", "u", "", "Unity URL")
-	flag.StringVarP(&argConf.APIURL, "api_url", "a", "", "API URL")
-	flag.StringVarP(&argConf.APIKEY, "api_key", "k", "", "Indicate the key of the API")
-	flag.StringVarP(&argConf.HistPath, "history_path", "h", "",
+	flag.StringVarP(&argConf.UnityURL, "UnityURL", "u", "", "Unity URL")
+	flag.StringVarP(&argConf.APIURL, "APIURL", "a", "", "API URL")
+	flag.StringVarP(&argConf.APIKEY, "APIKey", "k", "", "Indicate the key of the API")
+	flag.StringVarP(&argConf.HistPath, "HistPath", "h", "",
 		"Indicate the location of the Shell's history file")
 	flag.StringVarP(&argConf.Script, "file", "f", "", "Launch the shell as an interpreter "+
 		" by only executing an OCLI script file")
 	flag.IntVarP(&argConf.DrawLimit, "DrawLimit", "d", 0,
-		" DrawLimit")
+		"Limit the number of objects Unity client shall draw upon success of a command ")
 	flag.Parse()
 
 	argsBytes, _ := json.Marshal(&argConf)
@@ -202,10 +184,16 @@ func ReadConfig() *Config {
 	//maps.Copy(conf, argsRead)
 	maps.Copy(tomlRead, argsRead)
 	maps.Copy(conf, tomlRead)
+	confBytes, _ := json.Marshal(conf)
+	json.Unmarshal(confBytes, &argConf)
 
-	Disp(conf)
+	//println()
+	//Disp(conf)
+	//println()
+	//println("DEBUG COMPARE WITH THE CONF STRUCT")
+	//DispConfig(argConf)
 
-	return &Config{}
+	return argConf
 }
 
 func UpdateConfigFile(conf *Config) error {

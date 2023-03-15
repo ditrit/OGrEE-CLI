@@ -3,6 +3,7 @@ package controllers
 //This file contains code associated with initialising the Shell
 
 import (
+	"cli/config"
 	l "cli/logger"
 	"cli/models"
 	"cli/readline"
@@ -42,7 +43,7 @@ func InitDebugLevel(verbose string) {
 }
 
 // Intialise the ShellState
-func InitState(env map[string]string) {
+func InitState(flags *config.Config) {
 	State.ClipBoard = nil
 	State.TreeHierarchy = &(Node{})
 	(*(State.TreeHierarchy)).Entity = -1
@@ -150,17 +151,17 @@ func InitState(env map[string]string) {
 	//The number of drawable jsons is not fixed
 	//GROUP was used as the length here because there
 	//is no need to check 'drawability' for objects after it
-	State.ObjsForUnity = SetObjsForUnity("updates", env)
-	State.DrawableObjs = SetObjsForUnity("drawable", env)
+	State.ObjsForUnity = SetObjsForUnity(flags.Updates)
+	State.DrawableObjs = SetObjsForUnity(flags.Drawable)
 	State.DrawableJsons = make(map[string]map[string]interface{}, GROUP)
 
 	for i := TENANT; i < GROUP+1; i++ {
 		ent := EntityToString(i)
-		State.DrawableJsons[ent] = SetDrawableTemplate(ent, env)
+		State.DrawableJsons[ent] = SetDrawableTemplate(ent, flags.DrawableJson)
 	}
 
 	//Set Draw Threshold
-	SetDrawThreshold(env)
+	SetDrawThreshold(flags.DrawLimit)
 }
 
 // It is useful to have the state to hold
@@ -283,51 +284,33 @@ func GetURLs(apiURL string, unityURL string) {
 
 // Helper for InitState will insert objs
 // and init DrawThreshold
-func SetObjsForUnity(x string, env map[string]string) []int {
+func SetObjsForUnity(objs []string) []int {
 	res := []int{}
 	allDetected := false
-
-	if objStr, ok := env[x]; ok && objStr != "" {
-		//ObjStr is equal to everything after 'updates='
-		arr := strings.Split(objStr, ",")
-
-		for i := range arr {
-			arr[i] = strings.ToLower(arr[i])
-
-			if val := EntityStrToInt(arr[i]); val != -1 {
-				res = append(res, val)
-
-			} else if arr[i] == "all" {
-				//Exit the loop and use default code @ end of function
-				allDetected = true
-				i = len(arr)
-			}
+	for _, obj := range objs {
+		obj = strings.ToLower(obj)
+		if val := EntityStrToInt(obj); val != -1 {
+			res = append(res, val)
+		} else if obj == "all" {
+			//Exit the loop and use default code @ end of function
+			allDetected = true
+			break
 		}
 	}
-
-	//Use default values
 	//Set the array to all and exit
 	//GROUP is the greatest value int enum type
 	//So we use that for the cond guard
-	if allDetected || len(res) == 0 {
-		if len(res) == 0 && !allDetected {
-			l.GetWarningLogger().Println(x + " key not found, going to use defaults")
-			if State.DebugLvl > 1 {
-				println(x + " key not found, going to use defaults")
-			}
-
-		}
+	if allDetected {
 		for idx := 0; idx < GROUP+1; idx++ {
 			res = append(res, idx)
 		}
 	}
 	return res
 }
-
-func SetDrawThreshold(env map[string]string) {
+func SetDrawThreshold(limit int) {
 	//Set Draw Threshold
-	limit, e := strconv.Atoi(env["drawLimit"])
-	if e != nil || limit < 0 {
+	//limit, e := strconv.Atoi(env["DrawLimit"])
+	if limit < 0 {
 		if State.DebugLvl > 0 {
 			println("Setting Draw Limit to default")
 		}
@@ -432,7 +415,6 @@ func CheckKeyIsValid(key string) bool {
 }
 
 func Login(user, key string) (string, string) {
-
 	if !CheckEmailIsValid(user) || !CheckKeyIsValid(key) {
 		l.GetInfoLogger().Println("Credentials not found or invalid, going to generate..")
 		if State.DebugLvl > NONE {

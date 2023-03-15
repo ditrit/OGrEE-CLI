@@ -40,43 +40,19 @@ func InterpretLine(str string) {
 	}
 }
 
-// Init the Shell
-func Start(flags *Flags, user string) {
-
-	rl, err := readline.NewEx(&readline.Config{
-		Prompt: "\u001b[1m\u001b[32m" + user + "@" + "OGrEE3D:" +
-			"\u001b[37;1m" + c.State.CurrPath + "\u001b[1m\u001b[32m$>\u001b[0m ",
-		HistoryFile:     c.State.HistoryFilePath,
-		AutoComplete:    GetPrefixCompleter(),
-		InterruptPrompt: "^C",
-		//EOFPrompt:       "exit",
-
-		HistorySearchFold: true,
-		//FuncFilterInputRune: filterInput,
-	})
-	if err != nil {
-		panic(err)
-	}
-	defer rl.Close()
-
-	//Allow the ShellState to hold a ptr to readline
-	c.SetStateReadline(rl)
+func Start(rl *readline.Instance, script, user string) {
 
 	//Execute Script if provided as arg and exit
-	if flags.script != "" {
-		if strings.Contains(flags.script, ".ocli") {
-			script := flags.script
+	if script != "" {
+		if strings.Contains(script, ".ocli") {
 			LoadFile(script)
 			os.Exit(0)
 		}
 	}
+
 	c.InitUnityCom(rl, c.State.UnityClientURL)
 
-	Repl(rl, user)
-}
-
-// The loop of the program
-func Repl(rl *readline.Instance, user string) {
+	// The loop of the program
 	for {
 		line, err := rl.Readline()
 		if err != nil { // io.EOF
